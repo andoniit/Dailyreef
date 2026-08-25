@@ -27,6 +27,7 @@ import {
 } from "./interaction";
 import { WaterSurface } from "./WaterSurface";
 import { Fish } from "./fish";
+import { Island } from "./island";
 
 const W = 6;
 const { floorY, half } = TANK;
@@ -271,7 +272,12 @@ function Scene({
   }, [feeding]);
 
   const swimmers = items.filter((i) => BY_ID[i.itemId]?.category === "fish");
-  const floorItems = items.filter((i) => BY_ID[i.itemId]?.category !== "fish");
+  // The island is anchored and breaches the surface, so it skips the
+  // draggable FloorItem path entirely.
+  const island = items.find((i) => i.itemId === "island");
+  const floorItems = items.filter(
+    (i) => BY_ID[i.itemId]?.category !== "fish" && i.itemId !== "island",
+  );
 
   return (
     <>
@@ -295,6 +301,21 @@ function Scene({
       <directionalLight position={[-6, 4, -5]} intensity={0.4} color="#8ec9ff" />
 
       <Block top={sand.colors[0]} deep={sand.colors[1]} />
+
+      {island && (
+        // Selectable so it can be sold, but with no drag handler — the
+        // island is anchored, and without this it would be the one item
+        // in the tank you could buy and never remove.
+        <group
+          onPointerDown={(e: ThreeEvent<PointerEvent>) => {
+            if (feeding) return;
+            e.stopPropagation();
+            onSelect(island.uid);
+          }}
+        >
+          <Island seed={island.seed} />
+        </group>
+      )}
 
       {floorItems.map((p) => (
         <FloorItem

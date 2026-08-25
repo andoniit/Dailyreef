@@ -27,6 +27,19 @@ export function ItemGlyph({ item, className = "h-10 w-10" }: { item: CatalogItem
             <circle cx="25" cy="17" r="1.6" fill="#16222f" />
           </>
         );
+      case "island":
+        return (
+          <>
+            {/* waterline */}
+            <path d="M2 27h36" stroke="#7fc9dd" strokeWidth="3" strokeLinecap="round" />
+            {/* sandbar */}
+            <path d="M8 27c2-7 7-10 12-10s10 3 12 10Z" fill={a} />
+            {/* palm */}
+            <path d="M20 17V7" stroke="#8d6c4a" strokeWidth="2.2" strokeLinecap="round" />
+            <path d="M20 7c-4-3-8-2-9 1M20 7c4-3 8-2 9 1M20 7c-2-4-6-5-8-3M20 7c2-4 6-5 8-3"
+              stroke={b} strokeWidth="2.2" strokeLinecap="round" fill="none" />
+          </>
+        );
       case "seahorse":
         return (
           <>

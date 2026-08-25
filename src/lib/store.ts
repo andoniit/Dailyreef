@@ -12,6 +12,17 @@ const uid = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
 
+/**
+ * Where the island is anchored. Lives here rather than in the island
+ * component so the store doesn't have to import a three.js module — that
+ * would both pull the 3D bundle into the sidebar and form an import cycle
+ * back through TANK.
+ */
+export const ISLAND_X = -1.15;
+export const ISLAND_Z = -1.15;
+/** Keep placed items this far clear of the island's footprint. */
+export const ISLAND_CLEAR = 1.45;
+
 export const TANK = {
   /** half-extent of the sand floor that items may occupy */
   half: 2.05,
@@ -63,11 +74,18 @@ type Actions = {
 
 /** Scatter a new item somewhere plausible, biased away from existing ones. */
 function findSpot(items: PlacedItem[]): { x: number; z: number } {
+  // The island is solid ground; anything dropped inside its footprint is
+  // simply buried and the purchase looks like it did nothing.
+  const hasIsland = items.some((i) => i.itemId === "island");
+  const clearOfIsland = (x: number, z: number) =>
+    !hasIsland || Math.hypot(x - ISLAND_X, z - ISLAND_Z) > ISLAND_CLEAR;
+
   let best = { x: 0, z: 0 };
   let bestDist = -1;
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 60; i++) {
     const x = (Math.random() * 2 - 1) * TANK.half;
     const z = (Math.random() * 2 - 1) * TANK.half;
+    if (!clearOfIsland(x, z)) continue;
     let nearest = Infinity;
     for (const it of items) {
       const d = (it.x - x) ** 2 + (it.z - z) ** 2;
@@ -228,12 +246,17 @@ export const useReef = create<State & Actions>()(
           return true;
         }
 
+        // The island is a fixed corner feature: one per tank, always in
+        // the same spot, never rotated or rescaled.
+        const isIsland = itemId === "island";
+        if (isIsland && s.items.some((i) => i.itemId === "island")) return false;
+
         const placed: PlacedItem = {
           uid: uid(),
           itemId,
-          ...findSpot(s.items),
-          rot: Math.random() * Math.PI * 2,
-          scale: 0.9 + Math.random() * 0.25,
+          ...(isIsland ? { x: ISLAND_X, z: ISLAND_Z } : findSpot(s.items)),
+          rot: isIsland ? 0 : Math.random() * Math.PI * 2,
+          scale: isIsland ? 1 : 0.9 + Math.random() * 0.25,
           seed: Math.random(),
         };
         const points = s.points - item.cost;
