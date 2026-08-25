@@ -1,4 +1,4 @@
-# Reef
+# DailyReef
 
 A habit and task tracker that pays you in coins for showing up. Coins buy fish,
 plants, stones, coral and sand for a 3D isometric aquarium that grows with you.

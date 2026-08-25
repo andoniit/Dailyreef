@@ -35,12 +35,30 @@ type ItemRow = {
 
 let userId: string | null = null;
 
+/**
+ * Writes stay closed until the cloud snapshot has been loaded into the
+ * store. zustand's persist middleware rehydrates from localStorage
+ * synchronously, so without this gate a mutation fired between mount and
+ * fetch pushes stale local state up and overwrites the real record.
+ */
+let hydrated = false;
+
 export function setCloudUser(id: string | null) {
   userId = id;
+  if (id === null) hydrated = false;
+}
+
+/** Called once the store holds cloud data and is safe to write back. */
+export function setCloudHydrated(v: boolean) {
+  hydrated = v;
 }
 
 export function cloudOn(): boolean {
-  return Boolean(userId && supabase());
+  return Boolean(userId && hydrated && supabase());
+}
+
+function ready(): boolean {
+  return Boolean(userId && hydrated);
 }
 
 function warn(label: string) {
@@ -113,13 +131,13 @@ const moveTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 export const cloud = {
   profile(patch: Partial<Record<string, unknown>>) {
     const db = supabase();
-    if (!db || !userId) return;
+    if (!db || !ready()) return;
     void db.from("profiles").update(patch).eq("id", userId).then(warn("profile"));
   },
 
   insertHabit(h: Habit, position: number) {
     const db = supabase();
-    if (!db || !userId) return;
+    if (!db || !ready()) return;
     void db
       .from("habits")
       .insert({ id: h.id, user_id: userId, name: h.name, reward: h.reward, position })
@@ -128,19 +146,19 @@ export const cloud = {
 
   updateHabit(id: string, patch: Record<string, unknown>) {
     const db = supabase();
-    if (!db || !userId) return;
+    if (!db || !ready()) return;
     void db.from("habits").update(patch).eq("id", id).then(warn("update habit"));
   },
 
   deleteHabit(id: string) {
     const db = supabase();
-    if (!db || !userId) return;
+    if (!db || !ready()) return;
     void db.from("habits").delete().eq("id", id).then(warn("delete habit"));
   },
 
   setHabitLog(habitId: string, day: string, on: boolean) {
     const db = supabase();
-    if (!db || !userId) return;
+    if (!db || !ready()) return;
     if (on) {
       void db
         .from("habit_logs")
@@ -158,7 +176,7 @@ export const cloud = {
 
   insertTask(t: Task) {
     const db = supabase();
-    if (!db || !userId) return;
+    if (!db || !ready()) return;
     void db
       .from("tasks")
       .insert({
@@ -175,19 +193,19 @@ export const cloud = {
 
   updateTask(id: string, patch: Record<string, unknown>) {
     const db = supabase();
-    if (!db || !userId) return;
+    if (!db || !ready()) return;
     void db.from("tasks").update(patch).eq("id", id).then(warn("update task"));
   },
 
   deleteTasks(ids: string[]) {
     const db = supabase();
-    if (!db || !userId || ids.length === 0) return;
+    if (!db || !ready() || ids.length === 0) return;
     void db.from("tasks").delete().in("id", ids).then(warn("delete tasks"));
   },
 
   insertItem(i: PlacedItem) {
     const db = supabase();
-    if (!db || !userId) return;
+    if (!db || !ready()) return;
     void db
       .from("aquarium_items")
       .insert({
@@ -206,7 +224,7 @@ export const cloud = {
   /** Dragging fires constantly — only the resting position is written. */
   moveItem(uid: string, x: number, z: number) {
     const db = supabase();
-    if (!db || !userId) return;
+    if (!db || !ready()) return;
     clearTimeout(moveTimers[uid]);
     moveTimers[uid] = setTimeout(() => {
       void db.from("aquarium_items").update({ x, z }).eq("id", uid).then(warn("move item"));
@@ -215,7 +233,7 @@ export const cloud = {
 
   deleteItem(uid: string) {
     const db = supabase();
-    if (!db || !userId) return;
+    if (!db || !ready()) return;
     clearTimeout(moveTimers[uid]);
     void db.from("aquarium_items").delete().eq("id", uid).then(warn("delete item"));
   },

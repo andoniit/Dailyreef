@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { loadSnapshot, setCloudUser } from "@/lib/cloud";
+import { loadSnapshot, setCloudHydrated, setCloudUser } from "@/lib/cloud";
 import { useReef } from "@/lib/store";
 import { HAS_SUPABASE } from "@/lib/supabase/config";
 import { supabase } from "@/lib/supabase/client";
@@ -36,6 +36,7 @@ export function useSession(): { account: Account; ready: boolean } {
 
       if (!user) {
         setCloudUser(null);
+        setCloudHydrated(false);
         setReady(true);
         return;
       }
@@ -45,8 +46,12 @@ export function useSession(): { account: Account; ready: boolean } {
 
       const snap = await loadSnapshot();
       if (cancelled) return;
-      if (snap) hydrate(snap);
-      else setReady(true);
+      if (snap) {
+        hydrate(snap);
+        setCloudHydrated(true);   // only now is it safe to write back
+      } else {
+        setReady(true);
+      }
     }
 
     void boot();

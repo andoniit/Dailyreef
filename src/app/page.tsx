@@ -39,7 +39,7 @@ export default function Home() {
         <header className="flex shrink-0 items-center gap-4 px-5 pb-3 pt-5">
           <div className="min-w-0">
             <h1 className="text-[24px] font-semibold leading-none tracking-[-0.03em] text-ink">
-              Reef
+              DailyReef
             </h1>
             <p className="mt-1.5 truncate text-[13.5px] text-ink-2">{prettyDate()}</p>
           </div>

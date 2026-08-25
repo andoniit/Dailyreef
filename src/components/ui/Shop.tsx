@@ -5,7 +5,7 @@ import { CATALOG, CATEGORY_LABEL } from "@/lib/catalog";
 import { useReef } from "@/lib/store";
 import type { Category } from "@/lib/types";
 import { Close, Coin } from "./icons";
-import { ItemGlyph } from "./ItemGlyph";
+import { ItemThumb } from "./ItemThumb";
 
 const ORDER: Category[] = ["fish", "plant", "rock", "coral", "decor", "sand"];
 
@@ -36,7 +36,7 @@ export function Shop({ onClose }: { onClose: () => void }) {
         className="animate-pop-in flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[20px] border border-line bg-panel shadow-[0_24px_60px_rgba(0,0,0,0.22)] sm:rounded-[20px]"
       >
         <header className="flex items-center gap-3 border-b border-line px-4 py-3">
-          <h2 className="text-[17px] font-semibold tracking-[-0.02em] text-ink">Reef shop</h2>
+          <h2 className="text-[17px] font-semibold tracking-[-0.02em] text-ink">DailyReef shop</h2>
           <span className="ml-auto flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-[14px] font-semibold tabular-nums text-ink">
             <Coin className="h-4 w-4 text-coin" />
             {points}
@@ -85,8 +85,8 @@ export function Shop({ onClose }: { onClose: () => void }) {
                 key={item.id}
                 className="flex items-center gap-3 rounded-xl border border-line bg-panel-2 p-3"
               >
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-panel">
-                  <ItemGlyph item={item} />
+                <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-panel">
+                  <ItemThumb item={item} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-1.5 truncate text-[14px] font-medium text-ink">

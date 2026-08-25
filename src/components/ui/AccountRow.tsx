@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { setCloudUser } from "@/lib/cloud";
+import { setCloudHydrated, setCloudUser } from "@/lib/cloud";
 import { supabase } from "@/lib/supabase/client";
 
 export function AccountRow({ email }: { email: string }) {
@@ -12,6 +12,7 @@ export function AccountRow({ email }: { email: string }) {
     if (!db) return;
     await db.auth.signOut();
     setCloudUser(null);
+    setCloudHydrated(false);
     localStorage.removeItem("reef-store");
     router.replace("/login");
     router.refresh();

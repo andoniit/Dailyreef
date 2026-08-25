@@ -29,6 +29,10 @@ type State = {
   sand: string;
   ownedSands: string[];
   lastSeen: string;
+  /** when true, nothing in the tank can be moved or sold */
+  locked: boolean;
+  /** backdrop behind the diorama */
+  reefBg: "light" | "dark";
   /** true once cloud data has landed (or we know we're local-only) */
   ready: boolean;
 };
@@ -36,6 +40,8 @@ type State = {
 type Actions = {
   hydrate: (snap: Snapshot) => void;
   setReady: (v: boolean) => void;
+  setLocked: (v: boolean) => void;
+  setReefBg: (v: "light" | "dark") => void;
 
   addHabit: (name: string, reward: number) => void;
   renameHabit: (id: string, name: string) => void;
@@ -79,32 +85,39 @@ function findSpot(items: PlacedItem[]): { x: number; z: number } {
 /** Free scenery so a brand-new tank isn't bare (cloud accounts get these from SQL). */
 const starter = (): PlacedItem[] =>
   [
-    { itemId: "seagrass", x: -1.5, z: 0.9 },
-    { itemId: "seagrass", x: 1.6, z: -1.1 },
-    { itemId: "pebbles", x: 0.4, z: 1.5 },
+    { itemId: "kelp", x: -1.62, z: 0.78, seed: 0.31 },
+    { itemId: "seagrass", x: 0.92, z: 1.48, seed: 0.72 },
+    { itemId: "teal-weed", x: -0.44, z: -1.22, seed: 0.18 },
+    { itemId: "pebbles", x: 1.38, z: 0.34, seed: 0.55 },
+    { itemId: "boulder", x: -1.8, z: -0.62, seed: 0.41 },
+    { itemId: "brain", x: 0.48, z: -0.18, seed: 0.63 },
+    { itemId: "violet-fan", x: 1.24, z: -1.46, seed: 0.27 },
   ].map((s) => ({
     ...s,
     uid: uid(),
     rot: Math.random() * Math.PI * 2,
-    scale: 0.9 + Math.random() * 0.25,
-    seed: Math.random(),
+    scale: 0.92 + Math.random() * 0.16,
   }));
 
 export const useReef = create<State & Actions>()(
   persist(
     (set, get) => ({
-      points: 0,
-      lifetime: 0,
+      points: 60,
+      lifetime: 60,
       habits: [],
       tasks: [],
       items: starter(),
       sand: DEFAULT_SAND,
       ownedSands: [DEFAULT_SAND],
       lastSeen: dayKey(),
+      locked: false,
+      reefBg: "light",
       ready: false,
 
       hydrate: (snap) => set({ ...snap, ready: true }),
       setReady: (v) => set({ ready: v }),
+      setLocked: (v) => set({ locked: v }),
+      setReefBg: (v) => set({ reefBg: v }),
 
       addHabit: (name, reward) => {
         const habit: Habit = {
@@ -231,12 +244,17 @@ export const useReef = create<State & Actions>()(
       },
 
       moveItem: (id, x, z) => {
+        // Guarded here rather than only in the UI: the drag handler, a
+        // stray pointer event and any future caller all funnel through
+        // this, so the lock cannot be routed around.
+        if (get().locked) return;
         set((s) => ({ items: s.items.map((i) => (i.uid === id ? { ...i, x, z } : i)) }));
         cloud.moveItem(id, x, z);
       },
 
       sellItem: (id) => {
         const s = get();
+        if (s.locked) return;
         const item = s.items.find((i) => i.uid === id);
         if (!item) return;
         const points = s.points + Math.floor((BY_ID[item.itemId]?.cost ?? 0) / 2);

@@ -49,5 +49,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|webp)$).*)"],
+  // static assets must bypass auth entirely: a gated /models/reef.glb
+  // gets redirected to /login and the loader receives HTML, not binary
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|models/|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico|glb|gltf|bin|woff2?|mp4|json)$).*)",
+  ],
 };

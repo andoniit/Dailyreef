@@ -66,3 +66,56 @@ export function Close({ className = "h-4 w-4" }: { className?: string }) {
     </svg>
   );
 }
+
+export function Lock({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.9 7V5.3a3.1 3.1 0 0 1 6.2 0V7" />
+      <rect x="3.3" y="7" width="9.4" height="6.2" rx="1.7" />
+      <path d="M8 9.5v1.4" />
+    </svg>
+  );
+}
+
+export function Unlock({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      {/* shackle swung open to the right — reads as "unlocked" at 16px
+          far better than a shackle that is merely a little taller */}
+      <path d="M8.2 7V5.3a3.1 3.1 0 0 1 6.2 0" />
+      <rect x="2.2" y="7" width="9.4" height="6.2" rx="1.7" />
+      <path d="M6.9 9.5v1.4" />
+    </svg>
+  );
+}
+
+export function Sun({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <circle cx="8" cy="8" r="3.1" />
+      <path d="M8 1.4v1.5M8 13.1v1.5M14.6 8h-1.5M2.9 8H1.4M12.7 3.3l-1.1 1.1M4.4 11.6l-1.1 1.1M12.7 12.7l-1.1-1.1M4.4 4.4L3.3 3.3" />
+    </svg>
+  );
+}
+
+export function Moon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13.2 9.8A5.6 5.6 0 0 1 6.2 2.8a5.8 5.8 0 1 0 7 7Z" />
+    </svg>
+  );
+}
+
+export function Food({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} aria-hidden fill="currentColor">
+      {/* a pinch of pellets falling */}
+      <circle cx="5" cy="3.1" r="1.35" />
+      <circle cx="9.6" cy="4.6" r="1.05" />
+      <circle cx="6.3" cy="7.4" r="1.15" />
+      <circle cx="10.7" cy="9.2" r="1.35" />
+      <circle cx="5.4" cy="11.6" r="1" />
+      <circle cx="9.2" cy="13.1" r="1.2" />
+    </svg>
+  );
+}

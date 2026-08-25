@@ -71,7 +71,7 @@ export function AuthForm() {
       className="w-full max-w-[380px] rounded-[18px] border border-line bg-panel p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
     >
       <h1 className="text-[24px] font-semibold tracking-[-0.03em] text-ink">
-        {mode === "signin" ? "Sign in to Reef" : "Create your Reef"}
+        {mode === "signin" ? "Sign in to DailyReef" : "Create your DailyReef"}
       </h1>
       <p className="mt-1.5 text-[14px] text-ink-2">
         {mode === "signin"

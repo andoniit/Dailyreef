@@ -11,6 +11,7 @@ export const CATALOG: CatalogItem[] = [
   { id: "seahorse",  name: "Seahorse",     category: "fish", cost: 95,  colors: ["#fbbf24", "#f59e0b"], variant: "seahorse", blurb: "Hovers upright, drifting." },
   { id: "jelly",     name: "Moon Jelly",   category: "fish", cost: 120, colors: ["#c4b5fd", "#a78bfa"], variant: "jelly",  blurb: "Pulses through the deep water." },
   { id: "ray",       name: "Manta Ray",    category: "fish", cost: 180, colors: ["#1e3a8a", "#93c5fd"], variant: "ray",    blurb: "The tank's quiet giant." },
+  { id: "angler",    name: "Anglerfish",   category: "fish", cost: 150, colors: ["#12b183", "#f5a623"], variant: "medium", blurb: "Carries its own light into the dark." },
 
   // ── Plants ────────────────────────────────────────────────────────
   { id: "seagrass",  name: "Seagrass",     category: "plant", cost: 12, colors: ["#4ade80", "#16a34a"], variant: "grass",  blurb: "A soft green tuft." },

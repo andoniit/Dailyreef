@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Reef — habits & tasks",
+  title: "DailyReef — habits & tasks",
   description:
     "A calm habit and task tracker. Every habit you keep grows the aquarium.",
 };
