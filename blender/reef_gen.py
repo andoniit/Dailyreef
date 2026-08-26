@@ -87,11 +87,30 @@ def table_coral(name, seed, radius=0.50, stem_h=0.32, thick=0.04, segs=20, lobes
 
 
 # ── 2. FAN ───────────────────────────────────────────────────────
-def fan_coral(name, seed, height=0.62, spread=2.1, thick=0.03, rings=4, arcs=13, lobes=6):
+def fan_coral(name, seed, height=0.62, spread=2.1, thick=0.028,
+              rings=7, arcs=21, lobes=7, ribs=7):
+    """Sea fan: a cupped, ribbed blade with a scalloped edge.
+
+    The plate used to be a flat solid sheet at 4x13, which read as a
+    cardboard cutout — a real gorgonian bows out of plane and carries
+    radiating branches. Both sides are generated from one centre surface
+    so the cupping and the ribs cannot drift apart between the faces.
+    """
     rng = random.Random(seed)
     ph = rng.uniform(0, TAU)
     verts, faces = [], []
     inner = height * 0.24
+
+    def centre(t, u):
+        """Mid-surface of the blade: radius, and its offset out of plane."""
+        a = (u - 0.5) * spread
+        # scalloped rim, growing outward so the base stays solid
+        edge = 1.0 + 0.17 * math.sin(u * math.pi * lobes + ph) * (t ** 2)
+        r = inner + (height - inner) * t * edge
+        # bow out of plane, plus radiating ribs that deepen toward the rim
+        cup = -0.075 * t * t
+        rib = 0.021 * math.sin(u * math.pi * ribs + ph * 0.5) * t
+        return math.sin(a) * r, cup + rib, math.cos(a) * r
 
     for side in (1, -1):
         base = len(verts)
@@ -99,10 +118,8 @@ def fan_coral(name, seed, height=0.62, spread=2.1, thick=0.03, rings=4, arcs=13,
             t = ri / rings
             for ai in range(arcs):
                 u = ai / (arcs - 1)
-                a = (u - 0.5) * spread
-                edge = 1.0 + 0.10 * math.sin(u * math.pi * lobes + ph) if ri == rings else 1.0
-                r = inner + (height - inner) * t * edge
-                verts.append((math.sin(a) * r, side * thick * 0.5, math.cos(a) * r))
+                x, y, z = centre(t, u)
+                verts.append((x, y + side * thick * 0.5, z))
         for ri in range(rings):
             for ai in range(arcs - 1):
                 i = base + ri * arcs + ai
@@ -120,18 +137,18 @@ def fan_coral(name, seed, height=0.62, spread=2.1, thick=0.03, rings=4, arcs=13,
             q = (i, j, per + j, per + i)
             faces.append(q if ai == 0 else q[::-1])
 
-    sseg = 6
+    sseg = 7
     top = len(verts)
-    for s in range(sseg):
-        a = s / sseg * TAU
+    for s_i in range(sseg):
+        a = s_i / sseg * TAU
         verts.append((math.cos(a) * 0.05, math.sin(a) * 0.05, inner * 0.95))
     bot = len(verts)
-    for s in range(sseg):
-        a = s / sseg * TAU
-        verts.append((math.cos(a) * 0.062, math.sin(a) * 0.062, -0.06))
-    for s in range(sseg):
-        s2 = (s + 1) % sseg
-        faces.append((top + s, top + s2, bot + s2, bot + s))
+    for s_i in range(sseg):
+        a = s_i / sseg * TAU
+        verts.append((math.cos(a) * 0.065, math.sin(a) * 0.065, -0.06))
+    for s_i in range(sseg):
+        s2 = (s_i + 1) % sseg
+        faces.append((top + s_i, top + s2, bot + s2, bot + s_i))
     return build(name, verts, faces)
 
 
@@ -320,30 +337,62 @@ def make_fish(name, length=0.34, height=0.17, width=0.085, rings=7, segs=8,
 
 
 # ── SEAWEED ──────────────────────────────────────────────────────
-def seaweed(name, seed, blades=5, height=0.7, width=0.07, lean=0.28):
-    """Tapered ribbons with a lean — reads as weed at very low poly."""
+def seaweed(name, seed, blades=7, height=0.7, width=0.075, lean=0.28):
+    """Ribbon weed with folded blades.
+
+    The old version was five flat two-vertex-wide quads: papery from every
+    angle, and the five segments made the lean read as a hinge rather than
+    a curve. Each blade now carries a raised midrib, so it has a shallow V
+    section that catches the light, and enough segments for the bend to be
+    smooth. The edges ruffle, which is what stops a long blade looking
+    like a strip of tape.
+    """
     rng = random.Random(seed)
     verts, faces = [], []
+    segs = 11
+
     for b in range(blades):
         a0 = rng.uniform(0, TAU)
-        ln = rng.uniform(lean * 0.5, lean * 1.3)
-        h = height * rng.uniform(0.6, 1.2)
-        w = width * rng.uniform(0.75, 1.25)
-        segs = 5
+        ln = rng.uniform(lean * 0.55, lean * 1.35)
+        h = height * rng.uniform(0.55, 1.25)
+        w = width * rng.uniform(0.75, 1.3)
+        twist = rng.uniform(-0.5, 0.5)
         base = len(verts)
-        ox = math.cos(a0) * rng.uniform(0, 0.12)
-        oy = math.sin(a0) * rng.uniform(0, 0.12)
-        for s in range(segs + 1):
-            t = s / segs
-            sway = math.sin(t * 2.2 + b) * ln
-            cw = w * (1.0 - 0.75 * t)
-            px, py = ox + math.cos(a0) * sway * h, oy + math.sin(a0) * sway * h
-            nx, ny = -math.sin(a0), math.cos(a0)
-            verts.append((px - nx * cw, py - ny * cw, h * t))
-            verts.append((px + nx * cw, py + ny * cw, h * t))
-        for s in range(segs):
-            i = base + s * 2
-            faces.append((i, i + 1, i + 3, i + 2))
+
+        # clumps splay from a common root rather than sharing one point
+        ox = math.cos(a0) * rng.uniform(0, 0.13)
+        oy = math.sin(a0) * rng.uniform(0, 0.13)
+
+        for s_i in range(segs + 1):
+            t = s_i / segs
+            # C-curve: leans away and keeps bending, instead of hinging
+            sway = (t * t * 0.75 + t * 0.25) * ln
+            px = ox + math.cos(a0) * sway * h
+            py = oy + math.sin(a0) * sway * h
+
+            # widest a third of the way up, drawn to a point at the tip
+            shape = math.sin(math.pi * min(t * 1.12, 1.0) ** 0.62) ** 0.85
+            ruffle = 1.0 - 0.22 * (s_i % 2)
+            cw = w * shape * ruffle
+
+            # blade plane turns along the length so it isn't a flat card
+            ang = a0 + math.pi / 2 + twist * t
+            nx, ny = math.cos(ang), math.sin(ang)
+
+            rib = 0.4 * cw            # midrib lifted out of the blade plane
+            dz = 0.16 * cw            # edges fall away from it
+            z = h * t
+
+            verts.append((px - nx * cw, py - ny * cw, z - dz))
+            verts.append((px + math.cos(a0) * rib * 0.35,
+                          py + math.sin(a0) * rib * 0.35, z))
+            verts.append((px + nx * cw, py + ny * cw, z - dz))
+
+        for s_i in range(segs):
+            i = base + s_i * 3
+            faces.append((i, i + 3, i + 4, i + 1))          # left half
+            faces.append((i + 1, i + 4, i + 5, i + 2))      # right half
+
     return build(name, verts, faces)
 
 
@@ -505,26 +554,57 @@ def bubble_coral(name, seed, count=7):
 
 
 # ── PLANT: anemone ───────────────────────────────────────────────
-def anemone(name, seed, arms=18, radius=0.19):
-    """Squat column under a crown of tentacles."""
+def anemone(name, seed, arms=20, radius=0.19):
+    """Squat column under a crown of tentacles.
+
+    Each tentacle used to be a single flat quad — a card that vanished
+    edge-on and never read as a tentacle from any angle. They are now
+    tapered tubes swept along a curve, drawn to a point at the tip.
+    """
     rng = random.Random(seed)
-    verts, faces = _lathe([(radius * 0.72, 0.0), (radius, 0.10), (radius * 0.85, 0.17)], segs=10)
+    verts, faces = _lathe(
+        [(radius * 0.72, 0.0), (radius, 0.10), (radius * 0.85, 0.17)], segs=12)
+
+    SEG, SIDE = 5, 5
     for i in range(arms):
-        a = i / arms * TAU
-        lean = rng.uniform(0.55, 1.0)
-        ln = rng.uniform(0.16, 0.30)
-        r0 = rng.uniform(0.018, 0.030)
+        a = i / arms * TAU + rng.uniform(-0.06, 0.06)
+        lean = rng.uniform(0.55, 1.05)
+        ln = rng.uniform(0.17, 0.32)
+        r0 = rng.uniform(0.017, 0.028)
         bx, by = math.cos(a) * radius * 0.7, math.sin(a) * radius * 0.7
-        tipx = bx + math.cos(a) * ln * lean
-        tipy = by + math.sin(a) * ln * lean
-        tipz = 0.17 + ln * (1.0 - lean * 0.55)
         nx, ny = -math.sin(a), math.cos(a)
         base = len(verts)
-        verts += [(bx - nx * r0, by - ny * r0, 0.15),
-                  (bx + nx * r0, by + ny * r0, 0.15),
-                  (tipx + nx * r0 * 0.3, tipy + ny * r0 * 0.3, tipz),
-                  (tipx - nx * r0 * 0.3, tipy - ny * r0 * 0.3, tipz)]
-        faces.append((base, base + 1, base + 2, base + 3))
+
+        for s_i in range(SEG):
+            t = s_i / SEG
+            # arcs up and outward, curling over near the tip
+            out = ln * lean * (t * 0.55 + t * t * 0.45)
+            z = 0.15 + ln * (1.0 - lean * 0.55) * math.sin(t * 1.5)
+            cx, cy = bx + math.cos(a) * out, by + math.sin(a) * out
+            r = r0 * (1.0 - 0.72 * t)
+            for j in range(SIDE):
+                b = j / SIDE * TAU
+                # cross-section in the plane normal to the tentacle's run
+                verts.append((cx + nx * math.cos(b) * r,
+                              cy + ny * math.cos(b) * r,
+                              z + math.sin(b) * r))
+        for s_i in range(SEG - 1):
+            for j in range(SIDE):
+                j2 = (j + 1) % SIDE
+                p0, p1 = base + s_i * SIDE, base + (s_i + 1) * SIDE
+                faces.append((p0 + j, p0 + j2, p1 + j2, p1 + j))
+
+        # close the tip to a point
+        t = 1.0
+        out = ln * lean
+        tipz = 0.15 + ln * (1.0 - lean * 0.55) * math.sin(1.5)
+        tip = len(verts)
+        verts.append((bx + math.cos(a) * out, by + math.sin(a) * out, tipz))
+        last = base + (SEG - 1) * SIDE
+        for j in range(SIDE):
+            j2 = (j + 1) % SIDE
+            faces.append((last + j, last + j2, tip))
+
     return build(name, verts, faces)
 
 

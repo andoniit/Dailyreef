@@ -22,6 +22,10 @@ export type PlacedItem = {
   scale: number;
   /** stable randomness for motion + silhouette */
   seed: number;
+  /** fish only: 0..1 feeding progress, drives how large it has grown */
+  growth?: number;
+  /** fish only: ailing fish die at the next rollover unless fed properly */
+  ailing?: "hunger" | "overfed" | null;
 };
 
 export type Habit = {

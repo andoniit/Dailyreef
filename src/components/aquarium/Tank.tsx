@@ -26,6 +26,7 @@ import {
   stepPellets,
 } from "./interaction";
 import { WaterSurface } from "./WaterSurface";
+import { TankEnv } from "./TankEnv";
 import { Fish } from "./fish";
 import { Island } from "./island";
 
@@ -214,11 +215,16 @@ function SwimmingItem({
 
 function Rig() {
   const { camera, size } = useThree();
+  const hasIsland = useReef((s) => s.items.some((i) => i.itemId === "island"));
   useEffect(() => {
     const cam = camera as THREE.OrthographicCamera;
-    cam.zoom = Math.max(24, Math.min(size.width / 8.9, size.height / 9.2));
+    // The palm stands well clear of the water AND sits at the far corner,
+    // and under this projection both of those push it up-screen. Without
+    // the extra headroom the crown is clipped by the panel edge.
+    const fit = hasIsland ? 10.4 : 9.2;
+    cam.zoom = Math.max(24, Math.min(size.width / 8.9, size.height / fit));
     cam.updateProjectionMatrix();
-  }, [camera, size]);
+  }, [camera, size, hasIsland]);
   return null;
 }
 
@@ -234,6 +240,7 @@ function Scene({
   const items = useReef((s) => s.items);
   const sandId = useReef((s) => s.sand);
   const moveItem = useReef((s) => s.moveItem);
+  const recordFeed = useReef((s) => s.recordFeed);
   const locked = useReef((s) => s.locked);
   const [dragging, setDragging] = useState<string | null>(null);
   const controls = useRef<React.ComponentRef<typeof OrbitControls>>(null);
@@ -282,6 +289,7 @@ function Scene({
   return (
     <>
       <Rig />
+      <TankEnv />
       <OrbitControls
         ref={controls}
         makeDefault
@@ -292,13 +300,22 @@ function Scene({
         rotateSpeed={0.6}
       />
 
-      <ambientLight intensity={1.0} />
-      <hemisphereLight args={["#cfeaff", "#f6d9b0", 0.6]} />
-      <directionalLight position={[6, 9, 5]} intensity={1.25} />
-      {/* straight overhead: gives every fish a highlight along its
-          back, so light reads as falling from the surface */}
-      <directionalLight position={[0.4, 12, 0.6]} intensity={1.7} color="#ffffff" />
-      <directionalLight position={[-6, 4, -5]} intensity={0.4} color="#8ec9ff" />
+      {/* High-key and colourful, deliberately: bright everywhere, with
+          just enough key over ambient to keep form.
+
+          The canvas is `flat` (no tone mapping), so anything over 1 hard
+          clips to white — and clipping is what was washing the colour out
+          of the reef. The old rig summed to 3.35 and blew every lit
+          surface to flat white. Keeping the total near 1 is what makes
+          the colours read as vivid rather than bleached; it is not about
+          making the tank darker. */}
+      <ambientLight intensity={0.60} />
+      {/* cool sky over warm sand bounce — carries most of the colour */}
+      <hemisphereLight args={["#dff5ff", "#ffe6bc", 0.40]} />
+      {/* sun through the surface */}
+      <directionalLight position={[4, 9, 5]} intensity={0.44} color="#fff4e0" />
+      {/* cyan kicker on the shadow side, so nothing goes muddy */}
+      <directionalLight position={[-6, 3, -4]} intensity={0.22} color="#7fd4f5" />
 
       <Block top={sand.colors[0]} deep={sand.colors[1]} />
 
@@ -377,6 +394,7 @@ function Scene({
               hit.y,
               THREE.MathUtils.clamp(hit.z, -half - 0.4, half + 0.4),
             );
+            recordFeed();
             return;
           }
           onSelect(null);
@@ -403,7 +421,7 @@ export default function Tank({
       flat
       dpr={[1, 2]}
       orthographic
-      camera={{ position: [9, 7, 9], zoom: 70, near: -50, far: 100 }}
+      camera={{ position: [9, 4.6, 9], zoom: 70, near: -50, far: 100 }}
       style={{ touchAction: "none" }}
     >
       <Scene selected={selected} onSelect={onSelect} feeding={feeding} />

@@ -5,7 +5,8 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { Bubbles, Contact, SwayBlade, rand } from "./parts";
 import type { CatalogItem, PlacedItem } from "@/lib/types";
-import { MODELLED, ReefModel } from "./ReefModel";
+import { GLOW, MODELLED, ReefModel } from "./ReefModel";
+import { Glow } from "./Glow";
 
 type P = { item: CatalogItem; placed: PlacedItem };
 
@@ -469,10 +470,58 @@ const REGISTRY: Record<string, (p: P) => React.ReactElement> = {
   wreck: Wreck,
 };
 
+/**
+ * How far each item bends in the current, as a fraction of its own height.
+ * Tall soft things stream; anemones only shiver; rock, coral skeleton and
+ * wreckage are rigid and stay out of this map entirely.
+ */
+const SWAY: Record<string, number> = {
+  kelp: 0.20,
+  "teal-weed": 0.17,
+  seagrass: 0.13,
+  "violet-fan": 0.055,
+  anemone: 0.05,
+};
+
+/** Halo size and height for the self-lit items, tuned to each silhouette. */
+const HALO: Record<string, { r: number; y: number }> = {
+  bubble: { r: 0.30, y: 0.20 },
+  "pink-tube": { r: 0.28, y: 0.30 },
+  anemone: { r: 0.26, y: 0.20 },
+  "violet-fan": { r: 0.32, y: 0.36 },
+  "teal-weed": { r: 0.28, y: 0.34 },
+};
+
+/** Contact-shadow radius per category; fish get none. */
+const SHADOW: Record<string, number> = {
+  plant: 0.32, rock: 0.34, coral: 0.36, decor: 0.46,
+};
+
 export function Scenery({ item, placed }: P) {
   // a Blender-authored mesh wins whenever one exists for this catalog id
   if (MODELLED.has(item.id)) {
-    return <ReefModel id={item.id} />;
+    const r = SHADOW[item.category];
+    const halo = HALO[item.id];
+    return (
+      <>
+        {/* Modelled items were rendering with no contact shadow at all,
+            which is most of why they looked pasted on top of the sand
+            rather than sitting in it. */}
+        {r !== undefined && <Contact r={r} />}
+        {halo && (
+          <Glow
+            color={item.colors[0]}
+            radius={halo.r}
+            y={halo.y}
+            // Kept low deliberately. These are additive, so several
+            // glowing items near each other compound — at higher values
+            // the reef disappears under a milky wash.
+            strength={0.09 + (GLOW[item.id] ?? 0) * 0.30}
+          />
+        )}
+        <ReefModel id={item.id} sway={SWAY[item.id] ?? 0} seed={placed.seed} />
+      </>
+    );
   }
   const Model = REGISTRY[item.variant];
   if (!Model) return null;

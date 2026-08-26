@@ -14,11 +14,11 @@ export const CATALOG: CatalogItem[] = [
   { id: "angler",    name: "Anglerfish",   category: "fish", cost: 150, colors: ["#12b183", "#f5a623"], variant: "medium", blurb: "Carries its own light into the dark." },
 
   // ── Plants ────────────────────────────────────────────────────────
-  { id: "seagrass",  name: "Seagrass",     category: "plant", cost: 12, colors: ["#4ade80", "#16a34a"], variant: "grass",  blurb: "A soft green tuft." },
-  { id: "kelp",      name: "Kelp",         category: "plant", cost: 22, colors: ["#15803d", "#22c55e"], variant: "kelp",   blurb: "Tall ribbons that sway." },
-  { id: "teal-weed", name: "Teal Weed",    category: "plant", cost: 28, colors: ["#2dd4bf", "#5eead4"], variant: "kelp",   blurb: "Pale and feathery." },
-  { id: "violet-fan",name: "Violet Fan",   category: "plant", cost: 40, colors: ["#a855f7", "#d8b4fe"], variant: "fan",    blurb: "Fans out to catch the current." },
-  { id: "anemone",   name: "Anemone",      category: "plant", cost: 55, colors: ["#fb7185", "#fda4af"], variant: "anemone",blurb: "Waving tentacles, always busy." },
+  { id: "seagrass",  name: "Seagrass",     category: "plant", cost: 12, colors: ["#5ef08d", "#1fbf5c"], variant: "grass",  blurb: "A soft green tuft." },
+  { id: "kelp",      name: "Kelp",         category: "plant", cost: 22, colors: ["#1fa34f", "#3ee07a"], variant: "kelp",   blurb: "Tall ribbons that sway." },
+  { id: "teal-weed", name: "Teal Weed",    category: "plant", cost: 28, colors: ["#2ff0d6", "#7dfbe6"], variant: "kelp",   blurb: "Pale and feathery." },
+  { id: "violet-fan",name: "Violet Fan",   category: "plant", cost: 40, colors: ["#c06bff", "#e6c4ff"], variant: "fan",    blurb: "Fans out to catch the current." },
+  { id: "anemone",   name: "Anemone",      category: "plant", cost: 55, colors: ["#ff7fa3", "#ffb8c8"], variant: "anemone",blurb: "Waving tentacles, always busy." },
 
   // ── Rocks ─────────────────────────────────────────────────────────
   { id: "pebbles",   name: "Pebble Cluster", category: "rock", cost: 8,  colors: ["#d6d3d1", "#a8a29e"], variant: "pebbles", blurb: "Three small stones." },
@@ -27,10 +27,10 @@ export const CATALOG: CatalogItem[] = [
   { id: "arch",      name: "Arch Rock",      category: "rock", cost: 50, colors: ["#a3937c", "#7a6a56"], variant: "arch",    blurb: "A doorway for the fish." },
 
   // ── Coral ─────────────────────────────────────────────────────────
-  { id: "brain",     name: "Brain Coral",    category: "coral", cost: 35, colors: ["#fbbf24", "#f59e0b"], variant: "brain",   blurb: "Domed and grooved." },
-  { id: "staghorn",  name: "Staghorn Coral", category: "coral", cost: 45, colors: ["#fb923c", "#fdba74"], variant: "staghorn",blurb: "Antlers reaching up." },
-  { id: "bubble",    name: "Bubble Coral",   category: "coral", cost: 55, colors: ["#67e8f9", "#a5f3fc"], variant: "bubble",  blurb: "A cluster of glassy beads." },
-  { id: "pink-tube", name: "Tube Coral",     category: "coral", cost: 60, colors: ["#f472b6", "#fbcfe8"], variant: "tube",    blurb: "Slender pink pipes." },
+  { id: "brain",     name: "Brain Coral",    category: "coral", cost: 35, colors: ["#ffd045", "#ffab1f"], variant: "brain",   blurb: "Domed and grooved." },
+  { id: "staghorn",  name: "Staghorn Coral", category: "coral", cost: 45, colors: ["#ffa254", "#ffcb92"], variant: "staghorn",blurb: "Antlers reaching up." },
+  { id: "bubble",    name: "Bubble Coral",   category: "coral", cost: 55, colors: ["#6ef4ff", "#b6faff"], variant: "bubble",  blurb: "A cluster of glassy beads." },
+  { id: "pink-tube", name: "Tube Coral",     category: "coral", cost: 60, colors: ["#ff7fc8", "#ffd6ee"], variant: "tube",    blurb: "Slender pink pipes." },
 
   // ── Decor ─────────────────────────────────────────────────────────
   { id: "chest",     name: "Treasure Chest", category: "decor", cost: 90,  colors: ["#92400e", "#fcd34d"], variant: "chest",  blurb: "Bubbles escape the lid." },

@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Habit, PlacedItem, Task } from "./types";
 import { BY_ID, DEFAULT_SAND } from "./catalog";
-import { addDays, dayKey } from "./date";
+import { addDays, dayKey, daysBetween } from "./date";
 import { cloud, type Snapshot } from "./cloud";
 
 const uid = () =>
@@ -18,10 +18,16 @@ const uid = () =>
  * would both pull the 3D bundle into the sidebar and form an import cycle
  * back through TANK.
  */
-export const ISLAND_X = -1.15;
-export const ISLAND_Z = -1.15;
+/** Feeding rules. */
+export const MAX_FEEDS_PER_DAY = 10;
+export const STARVE_DAYS = 3;
+/** How much one feed drop grows a fish, and the cap on total growth. */
+const GROWTH_PER_FEED = 0.055;
+
+export const ISLAND_X = -3;
+export const ISLAND_Z = -3;
 /** Keep placed items this far clear of the island's footprint. */
-export const ISLAND_CLEAR = 1.45;
+export const ISLAND_CLEAR = 2.35;
 
 export const TANK = {
   /** half-extent of the sand floor that items may occupy */
@@ -44,6 +50,12 @@ type State = {
   locked: boolean;
   /** backdrop behind the diorama */
   reefBg: "light" | "dark";
+  /** dayKey -> how many times food was dropped that day */
+  feeds: Record<string, number>;
+  /** dayKey of the last feeding, or null if never fed */
+  lastFed: string | null;
+  /** what the last rollover did, so the UI can report it once */
+  notice: string | null;
   /** true once cloud data has landed (or we know we're local-only) */
   ready: boolean;
 };
@@ -53,6 +65,9 @@ type Actions = {
   setReady: (v: boolean) => void;
   setLocked: (v: boolean) => void;
   setReefBg: (v: "light" | "dark") => void;
+  /** one drop of food: grows the fish, and punishes overfeeding */
+  recordFeed: () => void;
+  clearNotice: () => void;
 
   addHabit: (name: string, reward: number) => void;
   renameHabit: (id: string, name: string) => void;
@@ -130,12 +145,79 @@ export const useReef = create<State & Actions>()(
       lastSeen: dayKey(),
       locked: false,
       reefBg: "light",
+      feeds: {},
+      lastFed: null,
+      notice: null,
       ready: false,
 
-      hydrate: (snap) => set({ ...snap, ready: true }),
+      hydrate: (snap) =>
+        set((s) => {
+          // growth and ailing live only on the device: the cloud tables
+          // have no columns for them, so a snapshot's items carry neither.
+          // Without this merge every cloud load would silently reset every
+          // fish to newborn and cure every sickness.
+          const prev = new Map(s.items.map((i) => [i.uid, i]));
+          return {
+            ...snap,
+            items: snap.items.map((i) => {
+              const p = prev.get(i.uid);
+              return p ? { ...i, growth: p.growth, ailing: p.ailing } : i;
+            }),
+            ready: true,
+          };
+        }),
       setReady: (v) => set({ ready: v }),
       setLocked: (v) => set({ locked: v }),
       setReefBg: (v) => set({ reefBg: v }),
+      clearNotice: () => set({ notice: null }),
+
+      recordFeed: () => {
+        const today = dayKey();
+        const s = get();
+        const count = (s.feeds[today] ?? 0) + 1;
+        const feeds = { ...s.feeds, [today]: count };
+
+        const fishIds = new Set(
+          s.items.filter((i) => BY_ID[i.itemId]?.category === "fish").map((i) => i.uid),
+        );
+        if (fishIds.size === 0) {
+          set({ feeds, lastFed: today });
+          return;
+        }
+
+        const overfed = count > MAX_FEEDS_PER_DAY;
+        let notice: string | null = null;
+
+        // Only one fish sickens per day from overfeeding — the offence is
+        // "you overfed today", not "you dropped one pellet too many".
+        const alreadySick = s.items.some((i) => i.ailing === "overfed");
+        const victim =
+          overfed && !alreadySick
+            ? s.items.find((i) => fishIds.has(i.uid) && !i.ailing)
+            : undefined;
+        if (victim) {
+          notice = `You overfed today. A ${BY_ID[victim.itemId]?.name ?? "fish"} is sick — stop feeding, or it won't last the day.`;
+        }
+
+        set({
+          feeds,
+          lastFed: today,
+          notice: notice ?? s.notice,
+          items: s.items.map((i) => {
+            if (!fishIds.has(i.uid)) return i;
+            const next = { ...i };
+            // eating always grows a fish, right up to the cap
+            next.growth = Math.min(1, (i.growth ?? 0) + GROWTH_PER_FEED);
+            if (victim && i.uid === victim.uid) {
+              next.ailing = "overfed";
+            } else if (!overfed && i.ailing === "hunger") {
+              // a proper feed cures hunger; it cannot cure overfeeding
+              next.ailing = null;
+            }
+            return next;
+          }),
+        });
+      },
 
       addHabit: (name, reward) => {
         const habit: Habit = {
@@ -301,13 +383,49 @@ export const useReef = create<State & Actions>()(
         const stale = s.tasks.filter((t) => t.done && t.completedAt !== today);
         const carried = s.tasks.filter((t) => !t.done && t.day !== today);
 
+        // ── fish ─────────────────────────────────────────────────
+        // A fish that was still ailing when the day turned over dies. It
+        // had the whole of yesterday to be put right, so the player has
+        // always had a chance to save it.
+        const fish = (i: PlacedItem) => BY_ID[i.itemId]?.category === "fish";
+        const doomed = s.items.filter((i) => fish(i) && i.ailing);
+        let items = s.items.filter((i) => !(fish(i) && i.ailing));
+
+        const notes: string[] = [];
+        for (const d of doomed) {
+          const why = d.ailing === "overfed" ? "from overfeeding" : "of hunger";
+          notes.push(`Your ${BY_ID[d.itemId]?.name ?? "fish"} died ${why}.`);
+        }
+
+        // Starvation is measured from the last feed, not from the last
+        // visit — coming back after a week without feeding still counts.
+        const hungry = s.lastFed ? daysBetween(s.lastFed, today) : null;
+        if (hungry !== null && hungry >= STARVE_DAYS) {
+          const victim = items.find((i) => fish(i) && !i.ailing);
+          if (victim) {
+            items = items.map((i) =>
+              i.uid === victim.uid ? { ...i, ailing: "hunger" as const } : i,
+            );
+            notes.push(
+              `Nothing has been fed for ${hungry} days. A ${BY_ID[victim.itemId]?.name ?? "fish"} is starving — feed it today or it dies.`,
+            );
+          }
+        }
+
+        // yesterday's tally is spent; keep only today's
+        const feeds = s.feeds[today] !== undefined ? { [today]: s.feeds[today] } : {};
+
         set({
           lastSeen: today,
+          feeds,
+          notice: notes.length ? notes.join(" ") : null,
+          items,
           tasks: s.tasks
             .filter((t) => !t.done || t.completedAt === today)
             .map((t) => (t.done ? t : { ...t, day: today })),
         });
 
+        doomed.forEach((d) => cloud.deleteItem(d.uid));
         cloud.deleteTasks(stale.map((t) => t.id));
         carried.forEach((t) => cloud.updateTask(t.id, { day: today }));
         cloud.profile({ last_seen: today });

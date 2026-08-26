@@ -278,10 +278,10 @@ const FRAG = /* glsl */ `
       // at all; anything heavier here buries the depth gradient under a
       // flat white wash, which is exactly what it was doing before.
       float crest = smoothstep(uCrestStart, uCrestStart + 0.05, vElevation);
-      color = mix(color, uFoamColor, crest * 0.35);
+      color = mix(color, uFoamColor, crest * 0.3);
 
-      color += vec3(1.0, 1.0, 0.96) * spec * 0.6;
-      color += vec3(0.55, 0.90, 1.0) * fresnel * 0.16;
+      color += vec3(1.0, 1.0, 0.96) * spec * 0.4;
+      color += vec3(0.55, 0.90, 1.0) * fresnel * 0.10;
       alpha = uOpacity + fresnel * 0.06;
     }
 
@@ -315,15 +315,20 @@ export function WaterSurface() {
           // climb to uSurfaceColor. Offset/multiplier below reproduce that
           // distribution for OUR elevation range, which is roughly half the
           // reference's because the tank is 6 units instead of 2.
-          uDepthColor: { value: new THREE.Color("#1f86ad") },
-          uSurfaceColor: { value: new THREE.Color("#9bd8ff") },
+          uDepthColor: { value: new THREE.Color("#35b3cc") },
+          uSurfaceColor: { value: new THREE.Color("#86e2f2") },
           uColorOffset: { value: 0.035 },
           uColorMultiplier: { value: 9.0 },
-          uOpacity: { value: 0.92 },
+          // Was 0.92, which meant anything seen through the surface —
+          // every fish in the middle of the tank, the island's lower
+          // half — contributed under a tenth of its own pixel and read
+          // as dark blue water. The wave colour still carries; it just
+          // no longer paints over the reef.
+          uOpacity: { value: 0.78 },
           uSunDir: { value: new THREE.Vector3(0.5, 0.8, 0.35).normalize() },
-          uWallShallow: { value: new THREE.Color("#4fd2de") },
-          uWallDeep: { value: new THREE.Color("#166f95") },
-          uWallOpacity: { value: 0.55 },
+          uWallShallow: { value: new THREE.Color("#6fe0e8") },
+          uWallDeep: { value: new THREE.Color("#2a9ab8") },
+          uWallOpacity: { value: 0.40 },
           uWaterTop: { value: waterTop },
           uWaterFloor: { value: WATER_FLOOR },
           uFoamColor: { value: new THREE.Color("#eaffff") },

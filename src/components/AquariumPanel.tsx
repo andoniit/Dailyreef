@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { BY_ID } from "@/lib/catalog";
-import { useReef } from "@/lib/store";
+import { MAX_FEEDS_PER_DAY, useReef } from "@/lib/store";
+import { dayKey } from "@/lib/date";
 import { Cart, Coin, Food, Lock, Moon, Sun, Unlock } from "./ui/icons";
 import { Shop } from "./ui/Shop";
 
@@ -54,6 +55,12 @@ export function AquariumPanel() {
   const setLocked = useReef((s) => s.setLocked);
   const reefBg = useReef((s) => s.reefBg);
   const setReefBg = useReef((s) => s.setReefBg);
+  const feedsToday = useReef((s) => s.feeds[dayKey()] ?? 0);
+  const notice = useReef((s) => s.notice);
+  const clearNotice = useReef((s) => s.clearNotice);
+  const ailing = useReef(
+    (s) => s.items.filter((i) => i.ailing).length,
+  );
 
   const dark = reefBg === "dark";
   const s = dark ? skin.dark : skin.light;
@@ -149,8 +156,32 @@ export function AquariumPanel() {
       <p
         className={`pointer-events-none absolute bottom-3.5 right-4 text-[11.5px] ${s.sub}`}
       >
-        {feeding ? "Click in the water to drop food" : "Drag to rotate"}
+        {feeding
+          ? `Feeds today ${feedsToday}/${MAX_FEEDS_PER_DAY}${
+              feedsToday > MAX_FEEDS_PER_DAY ? " — overfed" : ""
+            }`
+          : "Drag to rotate"}
       </p>
+
+      {/* Deaths and warnings have to be impossible to miss — losing a fish
+          you paid for should never happen silently. */}
+      {notice && (
+        <div className="animate-pop-in absolute inset-x-3 top-16 mx-auto max-w-md rounded-2xl border border-danger/30 bg-panel/95 px-4 py-3 shadow-[0_8px_28px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+          <p className="text-[13px] leading-snug text-ink">{notice}</p>
+          <button
+            onClick={clearNotice}
+            className="mt-2 text-[12.5px] font-medium text-accent"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {!notice && ailing > 0 && (
+        <div className="pointer-events-none absolute left-3 top-16 rounded-full border border-danger/30 bg-panel/92 px-3 py-1.5 text-[12px] font-medium text-danger shadow-[0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+          {ailing === 1 ? "1 fish is sick" : `${ailing} fish are sick`}
+        </div>
+      )}
 
       {shopOpen && <Shop onClose={() => setShopOpen(false)} />}
     </section>

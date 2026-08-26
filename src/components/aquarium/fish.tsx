@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rand } from "./parts";
 import type { CatalogItem, PlacedItem } from "@/lib/types";
 import { MODELLED, ReefModel } from "./ReefModel";
+import { floorAt } from "./terrain";
 import { eatPellet, lure, nearestPellet, pellets } from "./interaction";
 
 type P = { item: CatalogItem; placed: PlacedItem };
@@ -60,6 +61,7 @@ function Swimmer({
   speed,
   upright = false,
   appetite = 1,
+  ailing = false,
   children,
 }: {
   seed: number;
@@ -68,6 +70,8 @@ function Swimmer({
   upright?: boolean;
   /** 0 = ignores food and the cursor entirely (drifters like jellyfish) */
   appetite?: number;
+  /** sick fish sink to the sand and stay there until they recover */
+  ailing?: boolean;
   children: React.ReactNode;
 }) {
   const g = useRef<THREE.Group>(null!);
@@ -117,6 +121,35 @@ function Swimmer({
     const d = Math.min(dt, 1 / 30);
     const t = clock.elapsedTime * speed + seed * 12;
     path(t, home);
+
+    // ── sick: settle onto the sand and stay put ──────────────────
+    if (ailing) {
+      if (!started.current) cur.copy(home);
+      // Hold the x/z it was already at and just sink, rather than
+      // steering to a fixed spot — a sick fish drifting sideways across
+      // the tank to reach some anchor point reads as swimming, which is
+      // the opposite of the intent.
+      const bed = floorAt(cur.x, cur.z) + 0.13;
+      const fall = Math.min(0.28 * d, Math.abs(cur.y - bed));
+      cur.y += cur.y > bed ? -fall : fall;
+      // barely-there drift so it does not look frozen in place
+      cur.x += Math.sin(t * 0.5 + seed) * 0.0008;
+      cur.z += Math.cos(t * 0.42 + seed * 2) * 0.0008;
+      g.current.position.copy(cur);
+
+      if (!upright) {
+        // list onto one side, easing over rather than snapping
+        qWant.setFromEuler(new THREE.Euler(0, seed * 6.28, 0.55 + Math.sin(t) * 0.05));
+        if (!started.current) qLevel.copy(qWant);
+        qLevel.slerp(qWant, Math.min(1, d * 1.5));
+        g.current.quaternion.copy(qLevel);
+        prev.copy(cur);
+      }
+      pull.current = 0;
+      chasing.current = -1;
+      started.current = true;
+      return;
+    }
 
     // ── pick something to chase ──────────────────────────────────
     let target: THREE.Vector3 | null = null;
@@ -419,6 +452,33 @@ function Ray({ item }: P) {
   );
 }
 
+/**
+ * Well-fed fish are visibly bigger; ailing ones shrink back a little and
+ * lose their colour, so trouble is legible in the tank itself rather than
+ * only in a notice you might miss.
+ */
+function Vitals({ placed, children }: { placed: PlacedItem; children: React.ReactNode }) {
+  const grown = 1 + (placed.growth ?? 0) * 0.75;
+  const scale = placed.ailing ? grown * 0.88 : grown;
+  const ref = useRef<THREE.Group>(null!);
+
+  useEffect(() => {
+    if (!ref.current || !placed.ailing) return;
+    // desaturate toward a sickly pale, and remember nothing — the clone
+    // is rebuilt whenever the model changes, so this cannot leak
+    ref.current.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (m && m.color) m.color.lerp(new THREE.Color("#cfd6d2"), 0.55);
+    });
+  }, [placed.ailing]);
+
+  return (
+    <group ref={ref} scale={scale}>
+      {children}
+    </group>
+  );
+}
+
 export function Fish({ item, placed }: P) {
   const seed = placed.seed;
   const v = item.variant;
@@ -446,30 +506,39 @@ export function Fish({ item, placed }: P) {
         speed={motion.speed}
         upright={motion.upright}
         appetite={motion.appetite}
+        ailing={!!placed.ailing}
       >
-        <ReefModel id={item.id} swim seed={seed} />
+        <Vitals placed={placed}>
+          <ReefModel id={item.id} swim seed={seed} />
+        </Vitals>
       </Swimmer>
     );
   }
 
   if (v === "jelly") {
     return (
-      <Swimmer seed={seed} band={0.9 + rand(seed, 5) * 0.7} speed={0.13} upright appetite={0}>
-        <Jelly item={item} placed={placed} />
+      <Swimmer seed={seed} band={0.9 + rand(seed, 5) * 0.7} speed={0.13} upright appetite={0} ailing={!!placed.ailing}>
+        <Vitals placed={placed}>
+          <Jelly item={item} placed={placed} />
+        </Vitals>
       </Swimmer>
     );
   }
   if (v === "seahorse") {
     return (
-      <Swimmer seed={seed} band={-0.2 + rand(seed, 5) * 0.5} speed={0.09} upright appetite={0.45}>
-        <Seahorse item={item} placed={placed} />
+      <Swimmer seed={seed} band={-0.2 + rand(seed, 5) * 0.5} speed={0.09} upright appetite={0.45} ailing={!!placed.ailing}>
+        <Vitals placed={placed}>
+          <Seahorse item={item} placed={placed} />
+        </Vitals>
       </Swimmer>
     );
   }
   if (v === "ray") {
     return (
-      <Swimmer seed={seed} band={DEEP + rand(seed, 5) * 0.5} speed={0.16} appetite={0.7}>
-        <Ray item={item} placed={placed} />
+      <Swimmer seed={seed} band={DEEP + rand(seed, 5) * 0.5} speed={0.16} appetite={0.7} ailing={!!placed.ailing}>
+        <Vitals placed={placed}>
+          <Ray item={item} placed={placed} />
+        </Vitals>
       </Swimmer>
     );
   }
@@ -479,8 +548,10 @@ export function Fish({ item, placed }: P) {
   const speed = v === "small" ? 0.42 : 0.3;
 
   return (
-    <Swimmer seed={seed} band={band} speed={speed}>
-      <BodyFish item={item} scale={scale} tall={v === "tall"} />
+    <Swimmer seed={seed} band={band} speed={speed} ailing={!!placed.ailing}>
+      <Vitals placed={placed}>
+        <BodyFish item={item} scale={scale} tall={v === "tall"} />
+      </Vitals>
     </Swimmer>
   );
 }

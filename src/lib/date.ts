@@ -29,3 +29,11 @@ export function prettyDate(key: string = dayKey()): string {
     day: "numeric",
   });
 }
+
+/** Whole days between two day keys (b - a). */
+export function daysBetween(a: string, b: string): number {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  const ms = Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad);
+  return Math.round(ms / 86400000);
+}
