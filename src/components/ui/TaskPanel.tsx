@@ -130,7 +130,10 @@ export function TaskPanel({ onEarn }: { onEarn: (n: number) => void }) {
   }, [tasks, today]);
 
   const open = tasks.filter((t) => !t.done);
-  const done = tasks.filter((t) => t.done);
+  // Only today's completions. Finished tasks are now kept as history for
+  // the monthly goal and the activity grid, so listing every one of them
+  // would fill this panel with months of past work.
+  const done = tasks.filter((t) => t.done && t.completedAt === today);
   const todayCount = open.filter((t) => t.day <= today).length;
 
   return (

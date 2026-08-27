@@ -25,6 +25,14 @@ export const FREE_CATEGORIES = ["fish", "plant", "rock", "coral"] as const;
 export type FreeCategory = (typeof FREE_CATEGORIES)[number];
 
 export const MAX_FEEDS_PER_DAY = 10;
+
+/**
+ * How long finished tasks are kept.
+ *
+ * Long enough that the monthly goal and the 18-week contribution grid
+ * both read complete history, short enough that the table stays small.
+ */
+export const RETAIN_DAYS = 400;
 export const STARVE_DAYS = 3;
 /** How much one feed drop grows a fish, and the cap on total growth. */
 const GROWTH_PER_FEED = 0.055;
@@ -96,6 +104,8 @@ type State = {
   reefBg: "light" | "dark";
   /** dayKey -> how many times food was dropped that day */
   feeds: Record<string, number>;
+  /** the day an overfeeding death last happened, so it is capped at one */
+  overfedDeath: string | null;
   /** dayKey of the last feeding, or null if never fed */
   lastFed: string | null;
   /** what the last rollover did, so the UI can report it once */
@@ -207,6 +217,7 @@ export const useReef = create<State & Actions>()(
       reefBg: "light",
       feeds: {},
       lastFed: null,
+      overfedDeath: null,
       notice: null,
       ready: false,
 
@@ -274,25 +285,41 @@ export const useReef = create<State & Actions>()(
 
         let notice: string | null = s.notice;
 
-        if (overfed) {
-          // Every drop past the limit costs a fish — not one per day.
-          // A cap that stops biting after the first offence would let you
-          // keep dumping food with no further consequence.
+        // At most ONE death per day.
+        //
+        // Charging a fish for every drop past the limit is what emptied a
+        // tank of 18 in a single session: once the counter is over, each
+        // further tap costs another fish, permanently, with nothing
+        // asking whether you meant it. Capping it means a bad day costs
+        // one fish rather than the whole reef, and the warning below still
+        // makes it clear to stop.
+        const alreadyDiedToday = s.overfedDeath === today;
+
+        if (overfed && !alreadyDiedToday) {
           const victim =
             items.find((i) => fishIds.has(i.uid) && i.ailing) ??
             items.find((i) => fishIds.has(i.uid));
           if (victim) {
             items = items.filter((i) => i.uid !== victim.uid);
             const name = BY_ID[victim.itemId]?.name ?? "fish";
-            const over = count - MAX_FEEDS_PER_DAY;
             notice =
-              `You overfed — ${count} feeds today, ${over} over the limit. ` +
-              `Your ${name} died. Stop feeding until tomorrow.`;
+              `You overfed — ${count} feeds today. Your ${name} died. ` +
+              `No more will die today, but stop feeding until tomorrow.`;
             cloud.deleteItem(victim.uid);
           }
+        } else if (overfed) {
+          notice =
+            `Still overfeeding — ${count} feeds today. ` +
+            `Nothing more will die today, but the food is going to waste.`;
         }
 
-        set({ feeds, lastFed: today, notice, items });
+        set({
+          feeds,
+          lastFed: today,
+          notice,
+          items,
+          overfedDeath: overfed && !alreadyDiedToday ? today : s.overfedDeath,
+        });
         cloud.profile({ last_seen: get().lastSeen });
       },
 
@@ -415,10 +442,15 @@ export const useReef = create<State & Actions>()(
       },
 
       clearDone: () => {
+        // Clears today's finished tasks only. Sweeping every completed
+        // task would delete the history the monthly goal counts.
+        const today = dayKey();
         const ids = get()
-          .tasks.filter((t) => t.done)
+          .tasks.filter((t) => t.done && t.completedAt === today)
           .map((t) => t.id);
-        set((s) => ({ tasks: s.tasks.filter((t) => !t.done) }));
+        set((s) => ({
+          tasks: s.tasks.filter((t) => !(t.done && t.completedAt === today)),
+        }));
         cloud.deleteTasks(ids);
       },
 
@@ -544,7 +576,18 @@ export const useReef = create<State & Actions>()(
         const s = get();
         if (s.lastSeen === today) return;
 
-        const stale = s.tasks.filter((t) => t.done && t.completedAt !== today);
+        // Completed tasks are HISTORY, not clutter, and deleting them was
+        // a real bug: tasksDoneInMonth() counts finished tasks, so wiping
+        // yesterday's every morning meant the monthly goal could only ever
+        // see today and permanently read near zero. The contribution grid
+        // lost the same data.
+        //
+        // Only genuinely ancient ones are dropped, well past any view that
+        // reads them, so the table still cannot grow without bound.
+        const cutoff = addDays(today, -RETAIN_DAYS);
+        const stale = s.tasks.filter(
+          (t) => t.done && t.completedAt !== null && t.completedAt < cutoff,
+        );
         // Only OVERDUE tasks roll forward. Carrying everything that
         // isn't today would drag next Friday's task back to this morning
         // the moment the date turned over.
@@ -588,7 +631,7 @@ export const useReef = create<State & Actions>()(
           notice: notes.length ? notes.join(" ") : null,
           items,
           tasks: s.tasks
-            .filter((t) => !t.done || t.completedAt === today)
+            .filter((t) => !t.done || (t.completedAt ?? today) >= cutoff)
             .map((t) => (!t.done && t.day < today ? { ...t, day: today } : t)),
         });
 
