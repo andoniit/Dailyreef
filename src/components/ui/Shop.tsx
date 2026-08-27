@@ -2,12 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { CATALOG, CATEGORY_LABEL } from "@/lib/catalog";
-import { useReef } from "@/lib/store";
+import { FREE_CATEGORIES, useReef } from "@/lib/store";
 import type { Category } from "@/lib/types";
 import { Close, Coin } from "./icons";
 import { ItemThumb } from "./ItemThumb";
 
-const ORDER: Category[] = ["fish", "plant", "rock", "coral", "decor", "sand"];
+/** "free" is a pseudo-tab: the starter picks, not a catalog category. */
+type Tab = Category | "free";
+const ORDER: Tab[] = ["free", "fish", "plant", "rock", "coral", "decor", "sand"];
+const TAB_LABEL: Record<string, string> = { ...CATEGORY_LABEL, free: "Free" };
 
 export function Shop({ onClose }: { onClose: () => void }) {
   const points = useReef((s) => s.points);
@@ -16,7 +19,9 @@ export function Shop({ onClose }: { onClose: () => void }) {
   const sand = useReef((s) => s.sand);
   const buy = useReef((s) => s.buy);
   const setSand = useReef((s) => s.setSand);
-  const [tab, setTab] = useState<Category>("fish");
+  const claimFree = useReef((s) => s.claimFree);
+  const freeClaimed = useReef((s) => s.freeClaimed);
+  const [tab, setTab] = useState<Tab>("free");
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -24,7 +29,10 @@ export function Shop({ onClose }: { onClose: () => void }) {
     return c;
   }, [items]);
 
-  const shown = CATALOG.filter((i) => i.category === tab);
+  // The island is a fixture of every tank rather than stock, so it is
+  // never listed for sale.
+  const shown = CATALOG.filter((i) => i.category === tab && i.id !== "island");
+  const unclaimed = FREE_CATEGORIES.filter((c) => !freeClaimed.includes(c));
 
   return (
     <div
@@ -61,11 +69,23 @@ export function Shop({ onClose }: { onClose: () => void }) {
                   : "text-ink-2 hover:bg-panel-2"
               }`}
             >
-              {CATEGORY_LABEL[c]}
+              {TAB_LABEL[c]}
+              {c === "free" && unclaimed.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-accent px-1.5 py-px text-[10.5px] font-semibold text-white">
+                  {unclaimed.length}
+                </span>
+              )}
             </button>
           ))}
         </nav>
 
+        {tab === "free" ? (
+          <FreePicks
+            claimed={freeClaimed}
+            counts={counts}
+            onClaim={claimFree}
+          />
+        ) : (
         <div className="scroll-thin grid gap-2 overflow-y-auto p-3 sm:grid-cols-2">
           {shown.map((item) => {
             const isSand = item.category === "sand";
@@ -123,6 +143,95 @@ export function Shop({ onClose }: { onClose: () => void }) {
             );
           })}
         </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The starter gift: one item free from each of four categories.
+ *
+ * Grouped by category with the whole category on offer, because the pick
+ * is the point — a fixed handout would not need a screen. Claimed items
+ * are fixtures afterwards and cannot be sold, which is stated here rather
+ * than discovered later when the Sell button is missing.
+ */
+function FreePicks({
+  claimed,
+  counts,
+  onClaim,
+}: {
+  claimed: string[];
+  counts: Record<string, number>;
+  onClaim: (id: string) => boolean;
+}) {
+  return (
+    <div className="scroll-thin overflow-y-auto p-3">
+      <p className="mb-3 rounded-xl bg-accent-soft px-3 py-2 text-[12.5px] leading-relaxed text-accent">
+        One free pick from each group to start your reef. Free items are
+        yours for good — they can&apos;t be sold.
+      </p>
+
+      <div className="space-y-4">
+        {FREE_CATEGORIES.map((cat) => {
+          const taken = claimed.includes(cat);
+          const options = CATALOG.filter((i) => i.category === cat);
+          return (
+            <section key={cat}>
+              <header className="mb-1.5 flex items-baseline gap-2 px-0.5">
+                <h3 className="text-[13px] font-semibold text-ink">
+                  {CATEGORY_LABEL[cat]}
+                </h3>
+                <span className="text-[11.5px] text-ink-3">
+                  {taken ? "already claimed" : "pick one, free"}
+                </span>
+              </header>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                {options.map((item) => {
+                  const count = counts[item.id] ?? 0;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-center gap-3 rounded-xl border border-line bg-panel-2 p-3 ${
+                        taken ? "opacity-45" : ""
+                      }`}
+                    >
+                      <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-panel">
+                        <ItemThumb item={item} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1.5 truncate text-[14px] font-medium text-ink">
+                          {item.name}
+                          {count > 0 && (
+                            <span className="rounded-full bg-accent-soft px-1.5 py-px text-[11px] font-semibold text-accent">
+                              {count}
+                            </span>
+                          )}
+                        </p>
+                        <p className="truncate text-[12px] text-ink-3">
+                          {item.blurb}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => onClaim(item.id)}
+                        disabled={taken}
+                        className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold transition-colors ${
+                          taken
+                            ? "bg-panel text-ink-3"
+                            : "bg-accent text-white hover:opacity-90"
+                        }`}
+                      >
+                        {taken ? "—" : "Free"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
       </div>
     </div>
   );

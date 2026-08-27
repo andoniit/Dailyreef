@@ -10,6 +10,9 @@ import { useReef } from "@/lib/store";
 import { useHydrated } from "@/lib/useHydrated";
 import { useSession } from "@/components/SessionGate";
 import { AccountRow } from "@/components/ui/AccountRow";
+import { Contributions } from "@/components/ui/Contributions";
+import { MonthlyGoal } from "@/components/ui/MonthlyGoal";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 type Flash = { id: number; delta: number };
 
@@ -67,6 +70,11 @@ export default function Home() {
         <div className="scroll-thin flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pb-6 pt-2">
           {loaded ? <HabitPanel onEarn={onEarn} /> : <PanelSkeleton title="Habits" />}
           {loaded ? <TaskPanel onEarn={onEarn} /> : <PanelSkeleton title="Tasks" />}
+          {loaded && <MonthlyGoal />}
+          {loaded && <Contributions />}
+          {/* rules live at the bottom of the sidebar, out of the way until
+              they're wanted */}
+          {loaded && <HowItWorks />}
         </div>
 
         {account && <AccountRow email={account.email} />}

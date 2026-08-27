@@ -1,7 +1,8 @@
 "use client";
 
 import { supabase } from "./supabase/client";
-import type { Habit, PlacedItem, Task } from "./types";
+import type { Habit, HabitCategory, PlacedItem, Task } from "./types";
+import { guessCategory } from "./habits";
 
 export type Snapshot = {
   points: number;
@@ -12,9 +13,17 @@ export type Snapshot = {
   sand: string;
   ownedSands: string[];
   lastSeen: string;
+  monthlyGoal: number;
+  freeClaimed: string[];
 };
 
-type HabitRow = { id: string; name: string; reward: number; created_at: string };
+type HabitRow = {
+  id: string;
+  name: string;
+  reward: number;
+  category: string | null;
+  created_at: string;
+};
 type TaskRow = {
   id: string;
   title: string;
@@ -31,6 +40,7 @@ type ItemRow = {
   rot: number;
   scale: number;
   seed: number;
+  gift: boolean | null;
 };
 
 let userId: string | null = null;
@@ -97,10 +107,15 @@ export async function loadSnapshot(): Promise<Snapshot | null> {
     sand: profile.data?.sand ?? "sand-shore",
     ownedSands: profile.data?.owned_sands ?? ["sand-shore"],
     lastSeen: profile.data?.last_seen ?? new Date().toISOString().slice(0, 10),
+    monthlyGoal: profile.data?.monthly_goal ?? 30,
+    freeClaimed: profile.data?.free_claimed ?? [],
     habits: ((habits.data ?? []) as HabitRow[]).map((h) => ({
       id: h.id,
       name: h.name,
       reward: h.reward,
+      // rows written before categories existed get one guessed from the
+      // name, so an older account doesn't show a wall of "Other"
+      category: (h.category as HabitCategory) ?? guessCategory(h.name),
       createdAt: String(h.created_at).slice(0, 10),
       log: byHabit[h.id] ?? {},
     })),
@@ -120,6 +135,7 @@ export async function loadSnapshot(): Promise<Snapshot | null> {
       rot: i.rot,
       scale: i.scale,
       seed: i.seed,
+      gift: i.gift ?? false,
     })),
   };
 }
@@ -140,7 +156,14 @@ export const cloud = {
     if (!db || !ready()) return;
     void db
       .from("habits")
-      .insert({ id: h.id, user_id: userId, name: h.name, reward: h.reward, position })
+      .insert({
+        id: h.id,
+        user_id: userId,
+        name: h.name,
+        reward: h.reward,
+        category: h.category,
+        position,
+      })
       .then(warn("insert habit"));
   },
 
@@ -217,6 +240,7 @@ export const cloud = {
         rot: i.rot,
         scale: i.scale,
         seed: i.seed,
+        gift: i.gift ?? false,
       })
       .then(warn("insert item"));
   },

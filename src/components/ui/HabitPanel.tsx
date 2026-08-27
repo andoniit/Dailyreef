@@ -1,9 +1,10 @@
 "use client";
 
-import { streakOf, useReef } from "@/lib/store";
+import { sortedHabits, streakOf, useReef } from "@/lib/store";
+import { CATEGORY_BY_ID } from "@/lib/habits";
 import { dayKey, lastDays, weekdayLetter } from "@/lib/date";
 import type { Habit } from "@/lib/types";
-import { AddRow } from "./AddRow";
+import { AddHabitRow } from "./AddHabitRow";
 import { Check, Coin, Flame, Trash } from "./icons";
 
 function WeekDots({ habit }: { habit: Habit }) {
@@ -53,9 +54,16 @@ function HabitRow({ habit, onEarn }: { habit: Habit; onEarn: (n: number) => void
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className={`truncate text-[15px] leading-snug ${done ? "text-ink-2" : "text-ink"}`}>
-          {habit.name}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <span
+            className="h-[7px] w-[7px] shrink-0 rounded-full"
+            style={{ background: CATEGORY_BY_ID[habit.category].tint }}
+            title={CATEGORY_BY_ID[habit.category].label}
+          />
+          <p className={`truncate text-[15px] leading-snug ${done ? "text-ink-2" : "text-ink"}`}>
+            {habit.name}
+          </p>
+        </div>
         <div className="mt-1.5 flex items-center gap-2.5">
           <WeekDots habit={habit} />
           {streak > 0 && (
@@ -84,7 +92,10 @@ function HabitRow({ habit, onEarn }: { habit: Habit; onEarn: (n: number) => void
 }
 
 export function HabitPanel({ onEarn }: { onEarn: (n: number) => void }) {
-  const habits = useReef((s) => s.habits);
+  const raw = useReef((s) => s.habits);
+  // core self-care categories rise to the top: that ordering is the app
+  // saying what it is for
+  const habits = sortedHabits(raw);
   const addHabit = useReef((s) => s.addHabit);
   const today = dayKey();
   const doneCount = habits.filter((h) => h.log[today]).length;
@@ -111,7 +122,7 @@ export function HabitPanel({ onEarn }: { onEarn: (n: number) => void }) {
               <HabitRow key={h.id} habit={h} onEarn={onEarn} />
             ))}
           </ul>
-          <AddRow placeholder="Add a habit" rewards={[10, 20, 35]} onAdd={addHabit} />
+          <AddHabitRow onAdd={addHabit} />
         </div>
       </div>
     </section>

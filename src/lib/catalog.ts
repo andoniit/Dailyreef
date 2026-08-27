@@ -38,7 +38,7 @@ export const CATALOG: CatalogItem[] = [
   { id: "wreck",     name: "Shipwreck",      category: "decor", cost: 200, colors: ["#7c4a2d", "#a86b45"], variant: "wreck",  blurb: "The centrepiece of any reef." },
   // Anchored to the far corner and breaches the surface, so unlike every
   // other item it is one-per-tank and cannot be dragged.
-  { id: "island",    name: "Palm Island",    category: "decor", cost: 260, colors: ["#f2e2be", "#3f9c5a"], variant: "island", blurb: "A sandbar in the far corner, with a coconut palm." },
+  { id: "island",    name: "Palm Island",    category: "decor", cost: 0,   colors: ["#f2e2be", "#3f9c5a"], variant: "island", blurb: "A sandbar in the far corner, with a coconut palm." },
 
   // ── Sand (global floor styles) ────────────────────────────────────
   { id: "sand-shore",  name: "Shore Sand",  category: "sand", cost: 0,   colors: ["#f7e3c6", "#e2914b"], variant: "sand", blurb: "Warm and default." },

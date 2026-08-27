@@ -49,6 +49,7 @@ export function useSession(): { account: Account; ready: boolean } {
       if (snap) {
         hydrate(snap);
         setCloudHydrated(true);   // only now is it safe to write back
+        useReef.getState().ensureIsland();
       } else {
         setReady(true);
       }

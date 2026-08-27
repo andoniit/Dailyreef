@@ -50,6 +50,50 @@ export const lure = {
 /** Height of the plane the cursor is projected onto. */
 export const LURE_Y = 0.55;
 
+/**
+ * The island, as solid ground fish must swim around.
+ *
+ * Held here as shared mutable state rather than read from the store per
+ * fish: this is sampled every frame by every swimmer, and a subscription
+ * each would re-render the whole shoal whenever anything in the tank
+ * changed. Tank keeps it in sync.
+ */
+export const islandZone = {
+  active: false,
+  x: 0,
+  z: 0,
+  /** footprint plus a margin, so fish clear it rather than grazing it */
+  r: 0,
+};
+
+/**
+ * Push a point out of the island if it has ended up inside.
+ *
+ * The island is solid from the seabed all the way up past the surface, so
+ * there is nothing to duck under — the exclusion is the whole column and
+ * the only way out is sideways. Displacing radially keeps the fish's own
+ * heading, so it slides around the shore instead of stopping dead.
+ */
+export function pushOutOfIsland(p: THREE.Vector3, girth = 0): void {
+  if (!islandZone.active) return;
+  // `girth` is the fish's own half-width. The push moves its origin, so
+  // without it a manta clears the shore by its centre and still buries
+  // half a wing in the sand.
+  const r = islandZone.r + girth;
+  const dx = p.x - islandZone.x;
+  const dz = p.z - islandZone.z;
+  const d = Math.hypot(dx, dz);
+  if (d >= r) return;
+  if (d < 1e-5) {
+    // dead centre: no meaningful direction, so pick one
+    p.x = islandZone.x + r;
+    return;
+  }
+  const k = r / d;
+  p.x = islandZone.x + dx * k;
+  p.z = islandZone.z + dz * k;
+}
+
 let clock = 0;
 let nextSlot = 0;
 

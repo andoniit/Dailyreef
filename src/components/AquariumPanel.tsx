@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { BY_ID } from "@/lib/catalog";
-import { MAX_FEEDS_PER_DAY, useReef } from "@/lib/store";
+import { ISLAND_SPOTS, MAX_FEEDS_PER_DAY, islandSpotAt, useReef } from "@/lib/store";
 import { dayKey } from "@/lib/date";
 import { Cart, Coin, Food, Lock, Moon, Sun, Unlock } from "./ui/icons";
 import { Shop } from "./ui/Shop";
@@ -61,6 +61,7 @@ export function AquariumPanel() {
   const ailing = useReef(
     (s) => s.items.filter((i) => i.ailing).length,
   );
+  const setIslandSpot = useReef((s) => s.setIslandSpot);
 
   const dark = reefBg === "dark";
   const s = dark ? skin.dark : skin.light;
@@ -69,6 +70,8 @@ export function AquariumPanel() {
   const selItem = sel ? BY_ID[sel.itemId] : null;
   const refund = selItem ? Math.floor(selItem.cost / 2) : 0;
   const isFish = selItem?.category === "fish";
+  const isIsland = sel?.itemId === "island";
+  const currentSpot = sel && isIsland ? islandSpotAt(sel.x, sel.z).id : null;
 
   const btn =
     "flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-medium shadow-[0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-colors";
@@ -91,12 +94,37 @@ export function AquariumPanel() {
             <p className={`text-[11px] ${s.sub}`}>
               {locked
                 ? "Locked — unlock to move or sell"
-                : isFish
-                  ? "Swims freely"
-                  : "Drag on the sand to move"}
+                : isIsland
+                  ? "Part of the tank — choose where it sits"
+                  : sel.gift
+                    ? "A free pick — yours for good"
+                  : isFish
+                    ? "Swims freely"
+                    : "Drag on the sand to move"}
             </p>
+            {/* The island is anchored rather than draggable, so its
+                placement needs explicit controls. */}
+            {isIsland && !locked && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {ISLAND_SPOTS.map((spot) => (
+                  <button
+                    key={spot.id}
+                    onClick={() => setIslandSpot(spot.id)}
+                    aria-pressed={currentSpot === spot.id}
+                    className={`rounded-full border px-2 py-0.5 text-[11.5px] font-medium transition-colors ${
+                      currentSpot === spot.id ? s.chromeOn : s.chrome
+                    }`}
+                  >
+                    {spot.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          {!locked && (
+          {/* Gifts and the island are fixtures, so there is nothing to
+              sell them for. Showing a dead Sell button would just invite
+              a click that does nothing. */}
+          {!locked && !sel.gift && !isIsland && (
             <button
               onClick={() => {
                 sellItem(sel.uid);

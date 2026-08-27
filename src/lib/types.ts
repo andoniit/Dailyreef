@@ -26,12 +26,23 @@ export type PlacedItem = {
   growth?: number;
   /** fish only: ailing fish die at the next rollover unless fed properly */
   ailing?: "hunger" | "overfed" | null;
+  /** claimed from the free starter picks — cannot be sold */
+  gift?: boolean;
 };
+
+export type HabitCategory =
+  | "fitness"
+  | "food"
+  | "hygiene"
+  | "selfcare"
+  | "mind"
+  | "other";
 
 export type Habit = {
   id: string;
   name: string;
   reward: number;
+  category: HabitCategory;
   createdAt: string;
   /** dayKey -> true */
   log: Record<string, boolean>;

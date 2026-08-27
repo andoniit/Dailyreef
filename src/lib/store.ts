@@ -2,9 +2,10 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Habit, PlacedItem, Task } from "./types";
+import type { Habit, HabitCategory, PlacedItem, Task } from "./types";
 import { BY_ID, DEFAULT_SAND } from "./catalog";
 import { addDays, dayKey, daysBetween } from "./date";
+import { DEFAULT_CATEGORY, categoryRank, guessCategory } from "./habits";
 import { cloud, type Snapshot } from "./cloud";
 
 const uid = () =>
@@ -19,15 +20,54 @@ const uid = () =>
  * back through TANK.
  */
 /** Feeding rules. */
+/** Categories offering a one-off free pick when you start out. */
+export const FREE_CATEGORIES = ["fish", "plant", "rock", "coral"] as const;
+export type FreeCategory = (typeof FREE_CATEGORIES)[number];
+
 export const MAX_FEEDS_PER_DAY = 10;
 export const STARVE_DAYS = 3;
 /** How much one feed drop grows a fish, and the cap on total growth. */
 const GROWTH_PER_FEED = 0.055;
 
-export const ISLAND_X = -3;
-export const ISLAND_Z = -3;
-/** Keep placed items this far clear of the island's footprint. */
-export const ISLAND_CLEAR = 2.35;
+/**
+ * Where an island may sit. The four corners are quarter islands cut flush
+ * by the two tank walls they touch; the centre is a full round one that
+ * no wall crosses, so it gets a smaller footprint to leave reef around it.
+ */
+export type IslandSpot = {
+  id: string;
+  label: string;
+  x: number;
+  z: number;
+  /** start angle of the fan, and how far it sweeps */
+  a0: number;
+  span: number;
+  /** footprint radius from the anchor */
+  r: number;
+  /** corners are sliced by the walls; the centre island is not */
+  cuts: boolean;
+};
+
+const Q = Math.PI / 2;
+export const ISLAND_SPOTS: IslandSpot[] = [
+  { id: "back",   label: "Back",   x: -3, z: -3, a0: 0,     span: Q, r: 2.15, cuts: true },
+  { id: "right",  label: "Right",  x:  3, z: -3, a0: Q,     span: Q, r: 2.15, cuts: true },
+  { id: "front",  label: "Front",  x:  3, z:  3, a0: Q * 2, span: Q, r: 2.15, cuts: true },
+  { id: "left",   label: "Left",   x: -3, z:  3, a0: Q * 3, span: Q, r: 2.15, cuts: true },
+  { id: "centre", label: "Centre", x:  0, z:  0, a0: 0, span: Q * 4, r: 1.55, cuts: false },
+];
+
+export const DEFAULT_ISLAND_SPOT = ISLAND_SPOTS[0];
+
+/** The spot an island instance is sitting on, matched by its anchor. */
+export function islandSpotAt(x: number, z: number): IslandSpot {
+  return (
+    ISLAND_SPOTS.find((s) => s.x === x && s.z === z) ?? DEFAULT_ISLAND_SPOT
+  );
+}
+
+/** Keep placed items this far clear of an island's footprint. */
+export const ISLAND_CLEAR = 0.25;
 
 export const TANK = {
   /** half-extent of the sand floor that items may occupy */
@@ -46,6 +86,10 @@ type State = {
   sand: string;
   ownedSands: string[];
   lastSeen: string;
+  /** how many tasks the user aims to finish this month */
+  monthlyGoal: number;
+  /** categories whose free starter pick has already been taken */
+  freeClaimed: string[];
   /** when true, nothing in the tank can be moved or sold */
   locked: boolean;
   /** backdrop behind the diorama */
@@ -67,14 +111,25 @@ type Actions = {
   setReefBg: (v: "light" | "dark") => void;
   /** one drop of food: grows the fish, and punishes overfeeding */
   recordFeed: () => void;
+  /** reposition the island onto one of the allowed spots */
+  setIslandSpot: (spotId: string) => void;
   clearNotice: () => void;
 
-  addHabit: (name: string, reward: number) => void;
+  addHabit: (name: string, reward: number, category: HabitCategory) => void;
+  setHabitCategory: (id: string, category: HabitCategory) => void;
+  setHabitReward: (id: string, reward: number) => void;
   renameHabit: (id: string, name: string) => void;
   removeHabit: (id: string) => void;
   toggleHabit: (id: string, day?: string) => number;
 
-  addTask: (title: string, reward: number) => void;
+  addTask: (title: string, reward: number, day?: string) => void;
+  renameTask: (id: string, title: string) => void;
+  moveTaskToDay: (id: string, day: string) => void;
+  setMonthlyGoal: (n: number) => void;
+  /** take the one free item allowed in its category */
+  claimFree: (itemId: string) => boolean;
+  /** the island is a fixture: put one back if the tank has none */
+  ensureIsland: () => void;
   toggleTask: (id: string) => number;
   removeTask: (id: string) => void;
   clearDone: () => void;
@@ -90,10 +145,12 @@ type Actions = {
 /** Scatter a new item somewhere plausible, biased away from existing ones. */
 function findSpot(items: PlacedItem[]): { x: number; z: number } {
   // The island is solid ground; anything dropped inside its footprint is
-  // simply buried and the purchase looks like it did nothing.
-  const hasIsland = items.some((i) => i.itemId === "island");
+  // simply buried and the purchase looks like it did nothing. Measured
+  // against where the island actually is, since it can be moved.
+  const island = items.find((i) => i.itemId === "island");
+  const spot = island ? islandSpotAt(island.x, island.z) : null;
   const clearOfIsland = (x: number, z: number) =>
-    !hasIsland || Math.hypot(x - ISLAND_X, z - ISLAND_Z) > ISLAND_CLEAR;
+    !spot || Math.hypot(x - spot.x, z - spot.z) > spot.r + ISLAND_CLEAR;
 
   let best = { x: 0, z: 0 };
   let bestDist = -1;
@@ -118,6 +175,7 @@ function findSpot(items: PlacedItem[]): { x: number; z: number } {
 /** Free scenery so a brand-new tank isn't bare (cloud accounts get these from SQL). */
 const starter = (): PlacedItem[] =>
   [
+    { itemId: "island", x: DEFAULT_ISLAND_SPOT.x, z: DEFAULT_ISLAND_SPOT.z, seed: 0.42 },
     { itemId: "kelp", x: -1.62, z: 0.78, seed: 0.31 },
     { itemId: "seagrass", x: 0.92, z: 1.48, seed: 0.72 },
     { itemId: "teal-weed", x: -0.44, z: -1.22, seed: 0.18 },
@@ -137,6 +195,8 @@ export const useReef = create<State & Actions>()(
     (set, get) => ({
       points: 60,
       lifetime: 60,
+      monthlyGoal: 30,
+      freeClaimed: [],
       habits: [],
       tasks: [],
       items: starter(),
@@ -171,6 +231,20 @@ export const useReef = create<State & Actions>()(
       setReefBg: (v) => set({ reefBg: v }),
       clearNotice: () => set({ notice: null }),
 
+      setIslandSpot: (spotId) => {
+        const s = get();
+        if (s.locked) return;
+        const spot = ISLAND_SPOTS.find((x) => x.id === spotId);
+        const island = s.items.find((i) => i.itemId === "island");
+        if (!spot || !island) return;
+        set({
+          items: s.items.map((i) =>
+            i.uid === island.uid ? { ...i, x: spot.x, z: spot.z } : i,
+          ),
+        });
+        cloud.moveItem(island.uid, spot.x, spot.z);
+      },
+
       recordFeed: () => {
         const today = dayKey();
         const s = get();
@@ -186,49 +260,67 @@ export const useReef = create<State & Actions>()(
         }
 
         const overfed = count > MAX_FEEDS_PER_DAY;
-        let notice: string | null = null;
 
-        // Only one fish sickens per day from overfeeding — the offence is
-        // "you overfed today", not "you dropped one pellet too many".
-        const alreadySick = s.items.some((i) => i.ailing === "overfed");
-        const victim =
-          overfed && !alreadySick
-            ? s.items.find((i) => fishIds.has(i.uid) && !i.ailing)
-            : undefined;
-        if (victim) {
-          notice = `You overfed today. A ${BY_ID[victim.itemId]?.name ?? "fish"} is sick — stop feeding, or it won't last the day.`;
+        // Eating always grows a fish, right up to the cap. Applied before
+        // any death so the survivors still benefit from the feed.
+        let items = s.items.map((i) => {
+          if (!fishIds.has(i.uid)) return i;
+          const next = { ...i };
+          next.growth = Math.min(1, (i.growth ?? 0) + GROWTH_PER_FEED);
+          // a feed within the limit cures hunger
+          if (!overfed && i.ailing === "hunger") next.ailing = null;
+          return next;
+        });
+
+        let notice: string | null = s.notice;
+
+        if (overfed) {
+          // Every drop past the limit costs a fish — not one per day.
+          // A cap that stops biting after the first offence would let you
+          // keep dumping food with no further consequence.
+          const victim =
+            items.find((i) => fishIds.has(i.uid) && i.ailing) ??
+            items.find((i) => fishIds.has(i.uid));
+          if (victim) {
+            items = items.filter((i) => i.uid !== victim.uid);
+            const name = BY_ID[victim.itemId]?.name ?? "fish";
+            const over = count - MAX_FEEDS_PER_DAY;
+            notice =
+              `You overfed — ${count} feeds today, ${over} over the limit. ` +
+              `Your ${name} died. Stop feeding until tomorrow.`;
+            cloud.deleteItem(victim.uid);
+          }
         }
 
-        set({
-          feeds,
-          lastFed: today,
-          notice: notice ?? s.notice,
-          items: s.items.map((i) => {
-            if (!fishIds.has(i.uid)) return i;
-            const next = { ...i };
-            // eating always grows a fish, right up to the cap
-            next.growth = Math.min(1, (i.growth ?? 0) + GROWTH_PER_FEED);
-            if (victim && i.uid === victim.uid) {
-              next.ailing = "overfed";
-            } else if (!overfed && i.ailing === "hunger") {
-              // a proper feed cures hunger; it cannot cure overfeeding
-              next.ailing = null;
-            }
-            return next;
-          }),
-        });
+        set({ feeds, lastFed: today, notice, items });
+        cloud.profile({ last_seen: get().lastSeen });
       },
 
-      addHabit: (name, reward) => {
+      addHabit: (name, reward, category = DEFAULT_CATEGORY) => {
         const habit: Habit = {
           id: uid(),
           name: name.trim(),
           reward,
+          category,
           createdAt: dayKey(),
           log: {},
         };
         set((s) => ({ habits: [...s.habits, habit] }));
         cloud.insertHabit(habit, get().habits.length);
+      },
+
+      setHabitCategory: (id, category) => {
+        set((s) => ({
+          habits: s.habits.map((h) => (h.id === id ? { ...h, category } : h)),
+        }));
+        cloud.updateHabit(id, { category });
+      },
+
+      setHabitReward: (id, reward) => {
+        set((s) => ({
+          habits: s.habits.map((h) => (h.id === id ? { ...h, reward } : h)),
+        }));
+        cloud.updateHabit(id, { reward });
       },
 
       renameHabit: (id, name) => {
@@ -266,17 +358,37 @@ export const useReef = create<State & Actions>()(
         return delta;
       },
 
-      addTask: (title, reward) => {
+      addTask: (title, reward, day = dayKey()) => {
         const task: Task = {
           id: uid(),
           title: title.trim(),
           reward,
-          day: dayKey(),
+          day,
           done: false,
           completedAt: null,
         };
         set((s) => ({ tasks: [...s.tasks, task] }));
         cloud.insertTask(task);
+      },
+
+      renameTask: (id, title) => {
+        set((s) => ({
+          tasks: s.tasks.map((t) => (t.id === id ? { ...t, title: title.trim() } : t)),
+        }));
+        cloud.updateTask(id, { title: title.trim() });
+      },
+
+      moveTaskToDay: (id, day) => {
+        set((s) => ({
+          tasks: s.tasks.map((t) => (t.id === id ? { ...t, day } : t)),
+        }));
+        cloud.updateTask(id, { day });
+      },
+
+      setMonthlyGoal: (n) => {
+        const monthlyGoal = Math.max(1, Math.round(n));
+        set({ monthlyGoal });
+        cloud.profile({ monthly_goal: monthlyGoal });
       },
 
       toggleTask: (id) => {
@@ -336,7 +448,9 @@ export const useReef = create<State & Actions>()(
         const placed: PlacedItem = {
           uid: uid(),
           itemId,
-          ...(isIsland ? { x: ISLAND_X, z: ISLAND_Z } : findSpot(s.items)),
+          ...(isIsland
+            ? { x: DEFAULT_ISLAND_SPOT.x, z: DEFAULT_ISLAND_SPOT.z }
+            : findSpot(s.items)),
           rot: isIsland ? 0 : Math.random() * Math.PI * 2,
           scale: isIsland ? 1 : 0.9 + Math.random() * 0.25,
           seed: Math.random(),
@@ -345,6 +459,52 @@ export const useReef = create<State & Actions>()(
         set({ points, items: [...s.items, placed] });
         cloud.insertItem(placed);
         cloud.profile({ points });
+        return true;
+      },
+
+      /**
+       * The island is part of the tank rather than something you own, so
+       * every tank has exactly one. Called after the cloud snapshot has
+       * landed — doing it during hydrate would fire the insert while the
+       * write gate is still closed and it would be dropped silently.
+       */
+      ensureIsland: () => {
+        const s = get();
+        if (s.items.some((i) => i.itemId === "island")) return;
+        const placed: PlacedItem = {
+          uid: uid(),
+          itemId: "island",
+          x: DEFAULT_ISLAND_SPOT.x,
+          z: DEFAULT_ISLAND_SPOT.z,
+          rot: 0,
+          scale: 1,
+          seed: Math.random(),
+        };
+        set({ items: [...s.items, placed] });
+        cloud.insertItem(placed);
+      },
+
+      claimFree: (itemId) => {
+        const item = BY_ID[itemId];
+        const s = get();
+        if (!item) return false;
+        if (!(FREE_CATEGORIES as readonly string[]).includes(item.category)) return false;
+        // one per category, ever
+        if (s.freeClaimed.includes(item.category)) return false;
+
+        const placed: PlacedItem = {
+          uid: uid(),
+          itemId,
+          ...findSpot(s.items),
+          rot: Math.random() * Math.PI * 2,
+          scale: 0.9 + Math.random() * 0.25,
+          seed: Math.random(),
+          gift: true,
+        };
+        const freeClaimed = [...s.freeClaimed, item.category];
+        set({ items: [...s.items, placed], freeClaimed });
+        cloud.insertItem(placed);
+        cloud.profile({ free_claimed: freeClaimed });
         return true;
       },
 
@@ -362,6 +522,10 @@ export const useReef = create<State & Actions>()(
         if (s.locked) return;
         const item = s.items.find((i) => i.uid === id);
         if (!item) return;
+        // Gifts and the island are fixtures, not stock: neither can be
+        // turned back into coins. Guarded here rather than only in the UI
+        // so nothing else in the app can sell them by accident.
+        if (item.gift || item.itemId === "island") return;
         const points = s.points + Math.floor((BY_ID[item.itemId]?.cost ?? 0) / 2);
         set({ items: s.items.filter((i) => i.uid !== id), points });
         cloud.deleteItem(id);
@@ -381,7 +545,10 @@ export const useReef = create<State & Actions>()(
         if (s.lastSeen === today) return;
 
         const stale = s.tasks.filter((t) => t.done && t.completedAt !== today);
-        const carried = s.tasks.filter((t) => !t.done && t.day !== today);
+        // Only OVERDUE tasks roll forward. Carrying everything that
+        // isn't today would drag next Friday's task back to this morning
+        // the moment the date turned over.
+        const carried = s.tasks.filter((t) => !t.done && t.day < today);
 
         // ── fish ─────────────────────────────────────────────────
         // A fish that was still ailing when the day turned over dies. It
@@ -422,7 +589,7 @@ export const useReef = create<State & Actions>()(
           items,
           tasks: s.tasks
             .filter((t) => !t.done || t.completedAt === today)
-            .map((t) => (t.done ? t : { ...t, day: today })),
+            .map((t) => (!t.done && t.day < today ? { ...t, day: today } : t)),
         });
 
         doomed.forEach((d) => cloud.deleteItem(d.uid));
@@ -433,9 +600,20 @@ export const useReef = create<State & Actions>()(
     }),
     {
       name: "reef-store",
-      version: 2,
-      // v1 data has the same shape; ids just aren't uuids yet
-      migrate: (persisted) => persisted as State & Actions,
+      version: 3,
+      migrate: (persisted) => {
+        // v2 habits predate categories, and the goal predates nothing —
+        // both need a value or the UI reads undefined on first paint.
+        const st = persisted as Partial<State>;
+        return {
+          ...st,
+          monthlyGoal: st.monthlyGoal ?? 30,
+          habits: (st.habits ?? []).map((h) => ({
+            ...h,
+            category: h.category ?? guessCategory(h.name),
+          })),
+        } as State & Actions;
+      },
       partialize: ({ ready, ...rest }) => rest,
     }
   )
@@ -451,4 +629,31 @@ export function streakOf(habit: Habit): number {
     cursor = addDays(cursor, -1);
   }
   return n;
+}
+
+/**
+ * Habits in display order: core self-care categories first, since those
+ * are what the app is for, then by the category list's own order.
+ */
+export function sortedHabits(habits: Habit[]): Habit[] {
+  return [...habits].sort(
+    (a, b) => categoryRank(a.category) - categoryRank(b.category),
+  );
+}
+
+/** How much was completed on a given day — habits done plus tasks done. */
+export function completionsOn(
+  day: string,
+  habits: Habit[],
+  tasks: Task[],
+): number {
+  let n = 0;
+  for (const h of habits) if (h.log[day]) n++;
+  for (const t of tasks) if (t.done && t.completedAt === day) n++;
+  return n;
+}
+
+/** Tasks finished inside the given month bucket, e.g. "2026-08". */
+export function tasksDoneInMonth(tasks: Task[], month: string): number {
+  return tasks.filter((t) => t.done && t.completedAt?.startsWith(month)).length;
 }

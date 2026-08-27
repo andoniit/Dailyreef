@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { TANK } from "@/lib/store";
+import { TANK, islandSpotAt, type IslandSpot } from "@/lib/store";
 import { W, floorAt } from "./terrain";
 import { rand } from "./parts";
 
@@ -16,11 +16,7 @@ const { waterTop } = TANK;
  * edges lie along z = -W/2 and x = -W/2, so they land on the walls without
  * any clipping work, and the outer arc feathers down into the seabed.
  */
-const CX = -W / 2;
-const CZ = -W / 2;
-
-/** Footprint radius from the corner, and how far the cap clears the water. */
-const R = 2.15;
+/** How far the cap clears the water. */
 const FREEBOARD = 0.46;
 /** Plateau ends here, beach runs to here, then it drops to the seabed. */
 const PLATEAU = 0.4;
@@ -53,7 +49,13 @@ function surfaceAt(u: number, bed: number): number {
  * leaves the cut edge floating above or below the surface it is meant to
  * close, which opens slivers along the whole join.
  */
-function roughAt(x: number, z: number, u: number, seed: number): number {
+function roughAt(
+  x: number,
+  z: number,
+  u: number,
+  seed: number,
+  spot: IslandSpot,
+): number {
   // fades out below the waterline so the submerged skirt still meets the
   // seabed cleanly
   const dry = Math.max(0, 1 - u / SHORE);
@@ -66,7 +68,7 @@ function roughAt(x: number, z: number, u: number, seed: number): number {
   // Ripples key off distance from the corner, not x/z, so they run
   // parallel to the shoreline the way a real beach's do. Keying them to
   // x/z instead gives a diagonal corduroy that reads as a texture bug.
-  const d = Math.hypot(x - CX, z - CZ);
+  const d = Math.hypot(x - spot.x, z - spot.z);
   const wander = Math.sin(x * 2.1 + z * 1.7 + seed * 3) * 0.8;
   const ripple = Math.sin(d * 14.0 + wander) * 0.013 * dry;
 
@@ -74,8 +76,14 @@ function roughAt(x: number, z: number, u: number, seed: number): number {
 }
 
 /** The island's finished height at a point — the only definition of it. */
-function islandY(x: number, z: number, u: number, seed: number): number {
-  return surfaceAt(u, floorAt(x, z)) + roughAt(x, z, u, seed);
+function islandY(
+  x: number,
+  z: number,
+  u: number,
+  seed: number,
+  spot: IslandSpot,
+): number {
+  return surfaceAt(u, floorAt(x, z)) + roughAt(x, z, u, seed, spot);
 }
 
 function sandColor(y: number, out: THREE.Color): THREE.Color {
@@ -87,14 +95,19 @@ function sandColor(y: number, out: THREE.Color): THREE.Color {
   return out.copy(WET).lerp(DEEP, t);
 }
 
-function buildIsland(seed: number): THREE.BufferGeometry {
+function buildIsland(seed: number, spot: IslandSpot): THREE.BufferGeometry {
   const RINGS = 28;
-  const SEG = 34;
+  // A full round island needs the whole sweep resolved, and its last
+  // column must meet its first — hence `closed`, which also decides
+  // whether there are wall cuts to build at all.
+  const closed = !spot.cuts;
+  const SEG = closed ? 64 : 34;
+  const { a0, span, r: R } = spot;
 
   // per-angle radius so the shoreline is ragged rather than a clean arc
   const radii: number[] = [];
   for (let j = 0; j <= SEG; j++) {
-    const a = (j / SEG) * (Math.PI / 2);
+    const a = a0 + (j / SEG) * span;
     const wob =
       Math.sin(a * 4 + seed * 7) * 0.5 +
       Math.sin(a * 7 - seed * 11) * 0.3 +
@@ -124,19 +137,22 @@ function buildIsland(seed: number): THREE.BufferGeometry {
     return pos.length / 3 - 1;
   };
 
-  // ── top surface: quarter fan from the corner ────────────────────
-  const apex = vert(CX, islandY(CX, CZ, 0, seed), CZ);
+  // ── top surface: fan from the anchor ────────────────────────────
+  const apex = vert(spot.x, islandY(spot.x, spot.z, 0, seed, spot), spot.z);
 
   const ringStart: number[] = [];
   for (let i = 1; i <= RINGS; i++) {
     ringStart.push(pos.length / 3);
     const u = i / RINGS;
     for (let j = 0; j <= SEG; j++) {
-      const a = (j / SEG) * (Math.PI / 2);
-      const d = u * radii[j];
-      const x = CX + Math.cos(a) * d;
-      const z = CZ + Math.sin(a) * d;
-      vert(x, islandY(x, z, u, seed), z);
+      // on a closed island the final column reuses the first radius, so
+      // the seam matches instead of showing a crack
+      const rj = closed && j === SEG ? radii[0] : radii[j];
+      const a = a0 + (j / SEG) * span;
+      const d = u * rj;
+      const x = spot.x + Math.cos(a) * d;
+      const z = spot.z + Math.sin(a) * d;
+      vert(x, islandY(x, z, u, seed, spot), z);
     }
   }
 
@@ -153,10 +169,11 @@ function buildIsland(seed: number): THREE.BufferGeometry {
   }
 
   // ── the two cut faces, flush against the tank walls ─────────────
+  // A centre island touches no wall, so it has nothing to slice.
   // Separate vertices on purpose: sharing them with the top surface
   // would let computeVertexNormals round the edge off, and the whole
   // point of the cut is that it reads as a hard slice.
-  for (const edge of [0, SEG]) {
+  for (const edge of closed ? [] : [0, SEG]) {
     let prevTop = -1;
     let prevBot = -1;
     // Starts at i = 0 — the corner itself. Beginning one ring out leaves
@@ -164,12 +181,12 @@ function buildIsland(seed: number): THREE.BufferGeometry {
     // resulting wedge into the water behind.
     for (let i = 0; i <= RINGS; i++) {
       const u = i / RINGS;
-      const a = (edge / SEG) * (Math.PI / 2);
+      const a = a0 + (edge / SEG) * span;
       const d = u * radii[edge];
-      const x = CX + Math.cos(a) * d;
-      const z = CZ + Math.sin(a) * d;
+      const x = spot.x + Math.cos(a) * d;
+      const z = spot.z + Math.sin(a) * d;
       const bed = floorAt(x, z);
-      const top = islandY(x, z, u, seed);
+      const top = islandY(x, z, u, seed, spot);
       if (top <= bed + 0.005) break;         // island has run out
 
       const tTop = vert(x, top, z, CUT);
@@ -476,15 +493,36 @@ function buildStar(): THREE.BufferGeometry {
   return g;
 }
 
-/** Point on the island's surface at radius d, angle a from the corner. */
-function onIsland(d: number, a: number): [number, number, number] {
-  const x = CX + Math.cos(a) * d;
-  const z = CZ + Math.sin(a) * d;
-  return [x, islandY(x, z, d / R, 0.42) - 0.02, z];
+/**
+ * A point on the island's surface, given as fractions of its own fan:
+ * `u` along the radius, `t` around the sweep. Fractions rather than world
+ * angles because the same prop layout has to land correctly on a quarter
+ * island in any corner and on the full round centre one.
+ */
+function onIsland(
+  spot: IslandSpot,
+  u: number,
+  t: number,
+  seed: number,
+): [number, number, number] {
+  const d = u * spot.r;
+  const a = spot.a0 + t * spot.span;
+  const x = spot.x + Math.cos(a) * d;
+  const z = spot.z + Math.sin(a) * d;
+  return [x, islandY(x, z, u, seed, spot) - 0.02, z];
 }
 
-export function Island({ seed = 0.42 }: { seed?: number }) {
-  const geo = useMemo(() => buildIsland(seed), [seed]);
+export function Island({
+  seed = 0.42,
+  x = -3,
+  z = -3,
+}: {
+  seed?: number;
+  x?: number;
+  z?: number;
+}) {
+  const spot = useMemo(() => islandSpotAt(x, z), [x, z]);
+  const geo = useMemo(() => buildIsland(seed, spot), [seed, spot]);
   const rosette = useMemo(() => buildRosette(seed), [seed]);
   const star = useMemo(() => buildStar(), []);
   useEffect(
@@ -496,18 +534,26 @@ export function Island({ seed = 0.42 }: { seed?: number }) {
     [geo, rosette, star],
   );
 
-  const palm = onIsland(1.0, Math.PI * 0.28);
+  const palm = onIsland(spot, 0.47, 0.56, seed);
 
-  // scattered across the dry beach, clear of the palm
+  // laid out as fractions of the fan, so the same arrangement works
+  // whichever spot the island is on
   const plants: Array<[number, number, number]> = [
-    [1.34, Math.PI * 0.12, 1.0],
-    [1.18, Math.PI * 0.40, 0.82],
-    [0.72, Math.PI * 0.46, 0.68],
-    [1.5, Math.PI * 0.30, 0.9],
+    [0.62, 0.24, 1.0],
+    [0.55, 0.80, 0.82],
+    [0.34, 0.92, 0.68],
+    [0.70, 0.60, 0.9],
   ];
   const stars: Array<[number, number]> = [
-    [1.62, Math.PI * 0.2],
-    [1.5, Math.PI * 0.42],
+    [0.75, 0.40],
+    [0.70, 0.84],
+  ];
+  const stones: Array<[number, number, number]> = [
+    [0.72, 0.16, 0.07],
+    [0.66, 0.88, 0.055],
+    [0.40, 0.12, 0.045],
+    [0.75, 0.66, 0.062],
+    [0.49, 0.44, 0.04],
   ];
 
   return (
@@ -520,8 +566,8 @@ export function Island({ seed = 0.42 }: { seed?: number }) {
         <Palm seed={seed} />
       </group>
 
-      {plants.map(([d, a, sc], i) => {
-        const p = onIsland(d, a);
+      {plants.map(([u, t, sc], i) => {
+        const p = onIsland(spot, u, t, seed);
         return (
           <group key={`p${i}`} position={p} scale={sc} rotation={[0, rand(seed, i) * 6, 0]}>
             <mesh geometry={rosette}>
@@ -535,8 +581,8 @@ export function Island({ seed = 0.42 }: { seed?: number }) {
         );
       })}
 
-      {stars.map(([d, a], i) => {
-        const p = onIsland(d, a);
+      {stars.map(([u, t], i) => {
+        const p = onIsland(spot, u, t, seed);
         return (
           <mesh
             key={`s${i}`}
@@ -550,14 +596,8 @@ export function Island({ seed = 0.42 }: { seed?: number }) {
       })}
 
       {/* shore stones */}
-      {[
-        [1.55, Math.PI * 0.08, 0.07],
-        [1.42, Math.PI * 0.44, 0.055],
-        [0.85, Math.PI * 0.06, 0.045],
-        [1.62, Math.PI * 0.33, 0.062],
-        [1.05, Math.PI * 0.22, 0.04],
-      ].map(([d, a, r], i) => {
-        const p = onIsland(d, a);
+      {stones.map(([u, t, r], i) => {
+        const p = onIsland(spot, u, t, seed);
         return (
           <mesh
             key={i}

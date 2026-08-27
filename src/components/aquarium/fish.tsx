@@ -7,7 +7,7 @@ import { rand } from "./parts";
 import type { CatalogItem, PlacedItem } from "@/lib/types";
 import { MODELLED, ReefModel } from "./ReefModel";
 import { floorAt } from "./terrain";
-import { eatPellet, lure, nearestPellet, pellets } from "./interaction";
+import { eatPellet, lure, pushOutOfIsland, nearestPellet, pellets } from "./interaction";
 
 type P = { item: CatalogItem; placed: PlacedItem };
 
@@ -61,6 +61,7 @@ function Swimmer({
   speed,
   upright = false,
   appetite = 1,
+  girth = 0.16,
   ailing = false,
   children,
 }: {
@@ -70,6 +71,8 @@ function Swimmer({
   upright?: boolean;
   /** 0 = ignores food and the cursor entirely (drifters like jellyfish) */
   appetite?: number;
+  /** half-width of the body, used to keep it clear of solid ground */
+  girth?: number;
   /** sick fish sink to the sand and stay there until they recover */
   ailing?: boolean;
   children: React.ReactNode;
@@ -195,6 +198,9 @@ function Swimmer({
     // Ease the goal off the path and back, rather than switching hard.
     pull.current += (want - pull.current) * Math.min(1, d * 1.6);
     goal.copy(home);
+    // Steer the destination clear of the island first, so the fish curves
+    // around it instead of driving into the shore and sliding along it.
+    pushOutOfIsland(goal, girth);
     if (target && pull.current > 0.001) goal.lerp(target, pull.current);
 
     // Chase at a bounded speed. Interpolating position straight to the
@@ -208,6 +214,9 @@ function Swimmer({
       if (step.lengthSq() > max * max) step.setLength(max);
       cur.add(step);
     }
+    // Backstop: the goal being clear does not guarantee the path to it is,
+    // and a lure or pellet can sit inside the island.
+    pushOutOfIsland(cur, girth);
     g.current.position.copy(cur);
 
     if (!upright) {
@@ -479,6 +488,11 @@ function Vitals({ placed, children }: { placed: PlacedItem; children: React.Reac
   );
 }
 
+/** Body half-width per species, for clearing solid ground. */
+const GIRTH: Record<string, number> = {
+  ray: 0.34, jelly: 0.2, tall: 0.2, medium: 0.18, seahorse: 0.12, small: 0.12,
+};
+
 export function Fish({ item, placed }: P) {
   const seed = placed.seed;
   const v = item.variant;
@@ -506,6 +520,7 @@ export function Fish({ item, placed }: P) {
         speed={motion.speed}
         upright={motion.upright}
         appetite={motion.appetite}
+        girth={GIRTH[v] ?? 0.16}
         ailing={!!placed.ailing}
       >
         <Vitals placed={placed}>

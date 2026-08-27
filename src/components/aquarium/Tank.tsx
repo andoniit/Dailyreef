@@ -5,7 +5,7 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { BY_ID } from "@/lib/catalog";
-import { TANK, useReef } from "@/lib/store";
+import { TANK, islandSpotAt, useReef } from "@/lib/store";
 import type { PlacedItem } from "@/lib/types";
 import { Scenery } from "./scenery";
 import {
@@ -21,6 +21,7 @@ import {
   POOL,
   clearFood,
   dropFood,
+  islandZone,
   lure,
   pellets,
   stepPellets,
@@ -282,6 +283,21 @@ function Scene({
   // The island is anchored and breaches the surface, so it skips the
   // draggable FloorItem path entirely.
   const island = items.find((i) => i.itemId === "island");
+
+  // Publish the island's footprint for the swimmers to avoid.
+  const islandX = island?.x;
+  const islandZ = island?.z;
+  useEffect(() => {
+    if (islandX === undefined || islandZ === undefined) {
+      islandZone.active = false;
+      return;
+    }
+    const spot = islandSpotAt(islandX, islandZ);
+    islandZone.active = true;
+    islandZone.x = spot.x;
+    islandZone.z = spot.z;
+    islandZone.r = spot.r + 0.2;
+  }, [islandX, islandZ]);
   const floorItems = items.filter(
     (i) => BY_ID[i.itemId]?.category !== "fish" && i.itemId !== "island",
   );
@@ -330,7 +346,7 @@ function Scene({
             onSelect(island.uid);
           }}
         >
-          <Island seed={island.seed} />
+          <Island seed={island.seed} x={island.x} z={island.z} />
         </group>
       )}
 
