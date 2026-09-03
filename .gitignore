@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# supabase CLI scratch — local project ref and version pins, not source
+supabase/.temp/
+
+# blender working renders from island_props.py
+blender/preview_*.png

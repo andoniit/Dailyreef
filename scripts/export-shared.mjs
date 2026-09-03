@@ -42,6 +42,7 @@ write("habit-categories.json", {
 write("rules.json", {
   maxFeedsPerDay: store.MAX_FEEDS_PER_DAY,
   starveDays: store.STARVE_DAYS,
+  feedTaskRatio: store.FEED_TASK_RATIO,
   freeCategories: store.FREE_CATEGORIES,
   tank: store.TANK,
   islandSpots: store.ISLAND_SPOTS,

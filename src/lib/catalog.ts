@@ -2,16 +2,16 @@ import type { CatalogItem } from "./types";
 
 export const CATALOG: CatalogItem[] = [
   // ── Fish ──────────────────────────────────────────────────────────
-  { id: "guppy",     name: "Guppy",        category: "fish", cost: 20,  colors: ["#f9a03f", "#ffd9a0"], variant: "small",  blurb: "Darts about near the surface." },
-  { id: "clownfish", name: "Clownfish",    category: "fish", cost: 30,  colors: ["#ff7043", "#fff3e0"], variant: "small",  blurb: "Never strays far from an anemone." },
-  { id: "neon",      name: "Neon Tetra",   category: "fish", cost: 35,  colors: ["#38bdf8", "#f43f5e"], variant: "small",  blurb: "A flick of blue in the midwater." },
-  { id: "tang",      name: "Blue Tang",    category: "fish", cost: 50,  colors: ["#2563eb", "#fbbf24"], variant: "medium", blurb: "Broad, calm, unhurried." },
-  { id: "angel",     name: "Angelfish",    category: "fish", cost: 65,  colors: ["#fcd34d", "#7c3aed"], variant: "tall",   blurb: "Tall fins, slow glide." },
-  { id: "koi",       name: "Koi",          category: "fish", cost: 80,  colors: ["#fef3c7", "#ef4444"], variant: "medium", blurb: "Patient and long-lived." },
-  { id: "seahorse",  name: "Seahorse",     category: "fish", cost: 95,  colors: ["#fbbf24", "#f59e0b"], variant: "seahorse", blurb: "Hovers upright, drifting." },
-  { id: "jelly",     name: "Moon Jelly",   category: "fish", cost: 120, colors: ["#c4b5fd", "#a78bfa"], variant: "jelly",  blurb: "Pulses through the deep water." },
-  { id: "ray",       name: "Manta Ray",    category: "fish", cost: 180, colors: ["#1e3a8a", "#93c5fd"], variant: "ray",    blurb: "The tank's quiet giant." },
-  { id: "angler",    name: "Anglerfish",   category: "fish", cost: 150, colors: ["#12b183", "#f5a623"], variant: "medium", blurb: "Carries its own light into the dark." },
+  { id: "guppy",     name: "Guppy",        category: "fish", cost: 1100,  colors: ["#f9a03f", "#ffd9a0"], variant: "small",  blurb: "Darts about near the surface." },
+  { id: "clownfish", name: "Clownfish",    category: "fish", cost: 1500,  colors: ["#ff7043", "#fff3e0"], variant: "small",  blurb: "Never strays far from an anemone." },
+  { id: "neon",      name: "Neon Tetra",   category: "fish", cost: 1800,  colors: ["#38bdf8", "#f43f5e"], variant: "small",  blurb: "A flick of blue in the midwater." },
+  { id: "tang",      name: "Blue Tang",    category: "fish", cost: 2500,  colors: ["#2563eb", "#fbbf24"], variant: "medium", blurb: "Broad, calm, unhurried." },
+  { id: "angel",     name: "Angelfish",    category: "fish", cost: 3200,  colors: ["#fcd34d", "#7c3aed"], variant: "tall",   blurb: "Tall fins, slow glide." },
+  { id: "koi",       name: "Koi",          category: "fish", cost: 4000,  colors: ["#fef3c7", "#ef4444"], variant: "medium", blurb: "Patient and long-lived." },
+  { id: "seahorse",  name: "Seahorse",     category: "fish", cost: 4800,  colors: ["#fbbf24", "#f59e0b"], variant: "seahorse", blurb: "Hovers upright, drifting." },
+  { id: "jelly",     name: "Moon Jelly",   category: "fish", cost: 6000, colors: ["#c4b5fd", "#a78bfa"], variant: "jelly",  blurb: "Pulses through the deep water." },
+  { id: "ray",       name: "Manta Ray",    category: "fish", cost: 9000, colors: ["#1e3a8a", "#93c5fd"], variant: "ray",    blurb: "The tank's quiet giant." },
+  { id: "angler",    name: "Anglerfish",   category: "fish", cost: 7500, colors: ["#12b183", "#f5a623"], variant: "medium", blurb: "Carries its own light into the dark." },
 
   // ── Plants ────────────────────────────────────────────────────────
   { id: "seagrass",  name: "Seagrass",     category: "plant", cost: 12, colors: ["#5ef08d", "#1fbf5c"], variant: "grass",  blurb: "A soft green tuft." },

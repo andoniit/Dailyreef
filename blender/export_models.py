@@ -44,15 +44,46 @@ OUT = os.path.abspath(
 )
 
 
+def socket_color(socket, depth=0):
+    """The constant colour behind a socket, following its link back."""
+    if not socket.is_linked:
+        c = socket.default_value
+        return (c[0], c[1], c[2])
+    if depth >= 4:
+        return (1.0, 1.0, 1.0)
+    node = socket.links[0].from_node
+    if node.type in {"MIX", "MIX_RGB"}:
+        # baseColorFactor arrives as a multiply against the attribute: one
+        # side resolves to white, the other to the factor.
+        sides = [s for s in node.inputs if s.type == "RGBA"][:2]
+        out = (1.0, 1.0, 1.0)
+        for s in sides:
+            c = socket_color(s, depth + 1)
+            out = (out[0] * c[0], out[1] * c[1], out[2] * c[2])
+        return out
+    # A colour attribute is the mesh's own colours, already in the mesh;
+    # anything else unrecognised is left to them too.
+    return (1.0, 1.0, 1.0)
+
+
 def base_color(material):
-    """The material's flat base colour, as linear RGB."""
+    """The material's flat base colour, as linear RGB.
+
+    Base Color is *linked* on everything carrying vertex colours: the
+    glTF importer wires the colour attribute into it, through a multiply
+    against `baseColorFactor` wherever that factor isn't white. The
+    socket's own `default_value` is a leftover 0.8 grey in that case, so
+    reading it dimmed every fish to 80% and dropped the factor entirely —
+    which is where `rgb(231,231,231)` came from, and why the clownfish's
+    orange fins, its eyes and its mouth all exported the same flat
+    neutral as its body.
+    """
     if material is None:
         return (1.0, 1.0, 1.0)
     if material.use_nodes:
         for node in material.node_tree.nodes:
             if node.type == "BSDF_PRINCIPLED":
-                c = node.inputs["Base Color"].default_value
-                return (c[0], c[1], c[2])
+                return socket_color(node.inputs["Base Color"])
     c = material.diffuse_color
     return (c[0], c[1], c[2])
 

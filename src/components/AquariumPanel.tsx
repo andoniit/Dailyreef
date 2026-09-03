@@ -3,7 +3,13 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { BY_ID } from "@/lib/catalog";
-import { ISLAND_SPOTS, MAX_FEEDS_PER_DAY, islandSpotAt, useReef } from "@/lib/store";
+import {
+  ISLAND_SPOTS,
+  MAX_FEEDS_PER_DAY,
+  canFeed,
+  islandSpotAt,
+  useReef,
+} from "@/lib/store";
 import { dayKey } from "@/lib/date";
 import { Cart, Coin, Food, Lock, Moon, Sun, Unlock } from "./ui/icons";
 import { Shop } from "./ui/Shop";
@@ -48,7 +54,7 @@ export function AquariumPanel() {
   const [shopOpen, setShopOpen] = useState(false);
   // deliberately not persisted — feed mode is a momentary activity, and
   // reloading into it would swallow the next click meant for an item
-  const [feeding, setFeeding] = useState(false);
+  const [feedMode, setFeedMode] = useState(false);
   const items = useReef((s) => s.items);
   const sellItem = useReef((s) => s.sellItem);
   const locked = useReef((s) => s.locked);
@@ -62,6 +68,13 @@ export function AquariumPanel() {
     (s) => s.items.filter((i) => i.ailing).length,
   );
   const setIslandSpot = useReef((s) => s.setIslandSpot);
+  const canDrop = useReef(canFeed);
+  // Derived rather than stored: a rollover mid-session can withdraw the
+  // food while feed mode is still switched on, and taps would go on
+  // dropping pellets that recordFeed then refuses — food in the water
+  // with nothing eating it. Reading the two together means the mode
+  // cannot outlive the permission.
+  const feeding = feedMode && canDrop;
 
   const dark = reefBg === "dark";
   const s = dark ? skin.dark : skin.light;
@@ -164,12 +177,21 @@ export function AquariumPanel() {
 
         <button
           onClick={() => {
-            setFeeding((f) => !f);
+            setFeedMode((f) => !f);
             setSelected(null);
           }}
-          className={`${btn} ${feeding ? s.chromeOn : s.chrome}`}
+          disabled={!canDrop}
+          className={`${btn} ${feeding ? s.chromeOn : s.chrome} ${
+            canDrop ? "" : "cursor-not-allowed opacity-40"
+          }`}
           aria-pressed={feeding}
-          title={feeding ? "Stop feeding" : "Feed the fish"}
+          title={
+            canDrop
+              ? feeding
+                ? "Stop feeding"
+                : "Feed the fish"
+              : "Finish half of a day's tasks to earn the next day's food"
+          }
         >
           <Food />
           {feeding ? "Feeding" : "Feed"}
@@ -188,7 +210,9 @@ export function AquariumPanel() {
           ? `Feeds today ${feedsToday}/${MAX_FEEDS_PER_DAY}${
               feedsToday > MAX_FEEDS_PER_DAY ? " — overfed" : ""
             }`
-          : "Drag to rotate"}
+          : canDrop
+            ? "Drag to rotate"
+            : "No food today — finish half of today's tasks"}
       </p>
 
       {/* Deaths and warnings have to be impossible to miss — losing a fish

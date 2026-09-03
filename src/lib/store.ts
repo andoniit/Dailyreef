@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Habit, HabitCategory, PlacedItem, Task } from "./types";
 import { BY_ID, DEFAULT_SAND } from "./catalog";
-import { addDays, dayKey, daysBetween } from "./date";
+import { addDays, dayKey, daysBetween, relativeDay } from "./date";
 import { DEFAULT_CATEGORY, categoryRank, guessCategory } from "./habits";
 import { cloud, type Snapshot } from "./cloud";
 
@@ -34,6 +34,13 @@ export const MAX_FEEDS_PER_DAY = 10;
  */
 export const RETAIN_DAYS = 400;
 export const STARVE_DAYS = 3;
+/**
+ * Share of a day's tasks that has to be finished to earn the next day's
+ * food. Judged once, at rollover: the carry-forward there rewrites `day`
+ * on everything still unfinished, so once today has absorbed yesterday's
+ * stragglers the ratio cannot be reconstructed.
+ */
+export const FEED_TASK_RATIO = 0.5;
 /** How much one feed drop grows a fish, and the cap on total growth. */
 const GROWTH_PER_FEED = 0.055;
 
@@ -108,6 +115,10 @@ type State = {
   overfedDeath: string | null;
   /** dayKey of the last feeding, or null if never fed */
   lastFed: string | null;
+  /** whether today's food was earned by the last day's tasks */
+  feedUnlocked: boolean;
+  /** the day that verdict was reached for, so a stale one cannot leak */
+  feedUnlockedOn: string | null;
   /** what the last rollover did, so the UI can report it once */
   notice: string | null;
   /** true once cloud data has landed (or we know we're local-only) */
@@ -217,6 +228,8 @@ export const useReef = create<State & Actions>()(
       reefBg: "light",
       feeds: {},
       lastFed: null,
+      feedUnlocked: true,
+      feedUnlockedOn: null,
       overfedDeath: null,
       notice: null,
       ready: false,
@@ -259,6 +272,7 @@ export const useReef = create<State & Actions>()(
       recordFeed: () => {
         const today = dayKey();
         const s = get();
+        if (!canFeed(s)) return;
         const count = (s.feeds[today] ?? 0) + 1;
         const feeds = { ...s.feeds, [today]: count };
 
@@ -622,12 +636,34 @@ export const useReef = create<State & Actions>()(
           }
         }
 
+        // ── food ─────────────────────────────────────────────────
+        // Whether today gets fed at all is settled by the day that just
+        // ended. It has to happen here, before the carry below moves
+        // every unfinished task onto today: after that the day's
+        // denominator is gone and the ratio reads as if nothing was due.
+        const ended = s.tasks.filter((t) => t.day === s.lastSeen);
+        const finished = ended.filter((t) => t.done).length;
+        // A day with nothing scheduled cannot be failed. Locking someone
+        // out for a day they were never given anything to do would let a
+        // quiet week starve a tank through no fault of the player's.
+        const feedUnlocked =
+          ended.length === 0 || finished / ended.length >= FEED_TASK_RATIO;
+        if (!feedUnlocked) {
+          notes.push(
+            `${relativeDay(s.lastSeen)} came in under half — ${finished} of ` +
+              `${ended.length} tasks — so there is no food today. Finish half ` +
+              `of today's to feed tomorrow.`,
+          );
+        }
+
         // yesterday's tally is spent; keep only today's
         const feeds = s.feeds[today] !== undefined ? { [today]: s.feeds[today] } : {};
 
         set({
           lastSeen: today,
           feeds,
+          feedUnlocked,
+          feedUnlockedOn: today,
           notice: notes.length ? notes.join(" ") : null,
           items,
           tasks: s.tasks
@@ -661,6 +697,27 @@ export const useReef = create<State & Actions>()(
     }
   )
 );
+
+/**
+ * Whether food may be dropped today.
+ *
+ * The verdict is only trusted for the day the rollover reached it for.
+ * Anything else — a fresh install, a day whose rollover has not run yet —
+ * feeds freely rather than locking someone out on a technicality.
+ *
+ * An ailing fish lifts the gate outright. Starvation is measured from the
+ * last feed and collected at the next rollover, so a locked tank holding
+ * a starving fish would be a death that nothing the player did that day
+ * could prevent: the warning says "feed it today or it dies", and that
+ * has to stay true.
+ */
+export function canFeed(
+  s: Pick<State, "feedUnlocked" | "feedUnlockedOn" | "items">,
+): boolean {
+  const fish = (i: PlacedItem) => BY_ID[i.itemId]?.category === "fish";
+  if (s.items.some((i) => fish(i) && i.ailing)) return true;
+  return s.feedUnlockedOn === dayKey() ? s.feedUnlocked : true;
+}
 
 /** Consecutive completed days ending today (or yesterday, if today is still open). */
 export function streakOf(habit: Habit): number {

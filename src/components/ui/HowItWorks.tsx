@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CATEGORIES } from "@/lib/habits";
-import { MAX_FEEDS_PER_DAY, STARVE_DAYS } from "@/lib/store";
+import { FEED_TASK_RATIO, MAX_FEEDS_PER_DAY, STARVE_DAYS } from "@/lib/store";
 
 function Section({
   title,
@@ -145,12 +145,20 @@ export function HowItWorks() {
               click in the water to drop food. Fish that eat grow bigger, up to
               about half as large again.
             </p>
+            <p>
+              Food has to be earned. Finish at least{" "}
+              {Math.round(FEED_TASK_RATIO * 100)}% of a day&rsquo;s tasks and you
+              can feed the next day; fall short and the tank goes without. A day
+              with nothing scheduled always counts as earned.
+            </p>
             <p className="text-danger">
               Feeding more than {MAX_FEEDS_PER_DAY} times in one day kills a
               fish on the spot, once per drop over the limit. Going{" "}
               {STARVE_DAYS} days without feeding makes a fish start starving —
               it sinks to the bottom and stops swimming, and dies at the next
-              rollover unless you feed it.
+              rollover unless you feed it. A starving fish overrides the rule
+              above: you can always feed while one is ailing, so a lean day
+              never becomes a death you cannot prevent.
             </p>
           </Section>
         </div>
